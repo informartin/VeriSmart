@@ -22,7 +22,7 @@ const verify = require('./checkValidity.js')
 * Migrate contract:
 
 ```
-portContract(
+redeploy.portContract(
     '0x58f2687bc23a5774fb4d8c5f5d7ab961aa220890', // Contract address at source blockchain
     'http://localhost:8545',                      // RPC of source blockchain
     'http://localhost:8546',                      // RPC of target blockchain
