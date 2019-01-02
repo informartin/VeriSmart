@@ -11,6 +11,7 @@ Hereby, no trust in the migrating entity is required.
   * Full blockchain nodes in archive mode
   * Access to underlying database for merkle-tree verifications (Currently leveldb is supported)
   * An unlocked account for deploying contracts and sending transactions on the target blockchain (Depending on the target chain, sufficient cryptocurrency may be requried)
+  * [Mythril](https://github.com/ConsenSys/mythril-classic) needs to be installed for observing contract dependencies
 
 * Install dependencies using npm: `npm install`
 
