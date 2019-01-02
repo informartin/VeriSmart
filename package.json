@@ -1,0 +1,26 @@
+{
+  "name": "transactions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "async": "^2.6.1",
+    "async-promise-queue": "^1.0.4",
+    "fast-csv": "^2.4.1",
+    "js-sha3": "^0.8.0",
+    "keccak": "^1.4.0",
+    "leveldown": "^4.0.1",
+    "levelup": "^3.1.1",
+    "merkle-patricia-tree": "^2.3.2",
+    "papaparse": "^4.6.1",
+    "request": "^2.88.0",
+    "request-promise-native": "^1.0.5",
+    "rlp": "^2.1.0",
+    "web3": "^1.0.0-beta.35"
+  }
+}
