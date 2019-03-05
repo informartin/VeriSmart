@@ -96,7 +96,8 @@ const portContract = (contract_address,
         // TODO: Clean up this mess
         let deploy_code = "0x" + createB.createBytecode(contract_code, storage);
         // TODO: Should calculate proper gas requirement for executing code
-        if (deploy_code.length < 450) {
+        console.log('Length', deploy_code.length);
+        if (deploy_code.length < 1000) {
             return await deployLogic(web3, target_address, deploy_code);
         } else {
             return await deployLargeContract(web3, target_address, contract_code, storage);

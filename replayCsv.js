@@ -3,23 +3,11 @@
 const fs = require('fs');
 const csv = require('fast-csv');
 const request = require('request-promise-native');
-//const queue = require('async-promise-queue');
 const async = require("async");
 const Web3 = require('web3');
 const web3 = new Web3('ws://localhost:8546');
 
-//queue.async
-
-const resultPath = '/Users/martin/Programming/datasets/results.json';
-const transactionsPath = '/Users/martin/Programming/datasets/results_4600000_5160000_short.csv';
-//const resultPath = '/home/martin/python/transactionExtraction/result_mappings.json';
-//const transactionsPath = '/home/martin/python/transactionExtraction/results.csv';
-
-//let state = {};
-//let results = new Map();
-let i = 0;
-
-const getState = async (rpc, node, contract_address, txPath = transactionsPath) => {
+const getState = async (rpc, node, contract_address, txPath) => {
     let transactions = [];
     let storage = {};
 
@@ -76,13 +64,13 @@ const getState = async (rpc, node, contract_address, txPath = transactionsPath) 
     return storage;
 };
 
-const getStateTofile = async (rpc, node, contract_address, txPath = transactionsPath, targetPath = resultPath) => {
+const getStateTofile = async (rpc, node, contract_address, txPath, targetPath) => {
     const results = await getState(rpc, node, contract_address, txPath);
     const json = JSON.stringify(results);
     fs.writeFile(targetPath, json, 'utf8', () => console.log('Json written'));
 };
 
-const getStateRaw = async (rpc, node, contract_address, txPath = transactionsPath) => {
+const getStateRaw = async (rpc, node, contract_address, txPath) => {
     let transactions = [];
     let result;
 
@@ -103,34 +91,11 @@ const getStateRaw = async (rpc, node, contract_address, txPath = transactionsPat
                 result = results;
                 resolve();
             });
-            /*
-                        queue(replayTransactionSocket, transactions, 8)
-                            .catch(reason => console.error(reason))
-                            .then(() => {
-                                console.log('Done!');
-                                //csv.writeToPath(targetPath, Object.entries(state));
-                                const json = JSON.stringify(strMapToObj(results));
-                                fs.writeFile(targetPath, json, 'utf8');
-                            });
-            */
         }));
     return result;
 };
 
 const replayTransactionSocket = async (transaction, node, rpc, contract_address) => {
-/*
-    web3.extend({
-        property: 'myReplay',
-        methods: [{
-            name: 'replayTx',
-            call: 'trace_replayTransaction',
-            params: 1,
-            inputFormatter: web3.extend.formatters.inputAddressFormatter
-        }]
-    });
-    const body = await web3.myReplay.replayTx(transaction);
-    console.log(body);
-*/
     let result = {};
     await new Promise((resolve, reject) => {
         web3.currentProvider.send({
@@ -166,10 +131,6 @@ const replayTransactionSocket = async (transaction, node, rpc, contract_address)
 const replayTransaction = async (transaction, node, rpc, contract_address, id) => {
     if((id % 100) == 0)
         console.log(id);
-    console.log(id, ' opened');
-    //const rpc = 'http://localhost:8545';
-    //const node = 'geth';
-    //const contract_address = '0x06012c8cf97BEaD5deAe237070F9587f8E7A266d';
     let options;
     switch(node) {
         case 'geth':

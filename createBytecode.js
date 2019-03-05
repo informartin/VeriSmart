@@ -1,7 +1,7 @@
 const contractFunc = require('./getContract.js');
 
 const preamble = '608060405234801561001057600080fd5b50',
-      PUSH1 = 60,//do not use string here, as it is used for calcularting PUSH1-PUSH32
+      PUSH1 = 60,//do not use string here, as it is used for calculating PUSH1-PUSH32
       DUP1 = '80',
       CODECOPY = '39',
       RETURN = 'F3',
@@ -59,8 +59,6 @@ const createBytecode = (contract_code, storage) => {
 
   deploy_code += contract_code;
 
-  //console.log(deploy_code_length);
-  //console.log(deploy_code);
   return deploy_code;
 };
 
