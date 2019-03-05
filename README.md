@@ -5,6 +5,8 @@ All operations are conducted in bytecode, so that the high level language code i
 Migrations are verifiable by comparing the source and target contracts' runtime codes and state roots.
 Hereby, no trust in the migrating entity is required.
 
+A detailed description can be found in the corresponding research paper: [Verifiable Smart Contract Portability](https://arxiv.org/abs/1902.03868)
+
 # Guide
 
 * Prerequisites:
