@@ -1,0 +1,26 @@
+const program = require('commander');
+const sharedAttributes = require('./index-shared-attributes');
+const redeployFunc = require('../redeployContract');
+
+sharedAttributes(program);
+
+
+program
+    .option('-t, --target <required>', 'Target RPC')
+    .option('-a, --address <required>', 'Address to use on target blockchain (unlocked)')
+    .parse(process.argv);
+
+const node = program.parity ? 'parity' : 'geth';
+
+redeployFunc.portContract(
+    program.contract,
+    program.source,
+    program.target,
+    program.address,
+    {
+        deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
+        csv_path: program.file ? program.file : undefined,
+        node: node,
+        targetFile: program.output ? program.output : undefined
+    }
+);

@@ -1,13 +1,13 @@
 const transactionsFunc = require('./getTransactions.js');
 const request = require('request-promise-native');
+const fs = require("fs");
 
-const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node}) => {
+const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, targetFile}) => {
 
   console.log('Retrieving contract code for: ', contract_address);
   let contract_code = '';
 
   return web3.eth.getCode(contract_address).then((raw_contract_code) => {
-      console.log(csv_path);
     contract_code = raw_contract_code.substring(2);
     if(typeof csv_path !== 'undefined')
         return transactionsFunc.getTransactionsFromCSV(csv_path);
@@ -20,6 +20,8 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
       const rpc = web3.currentProvider.host;
       //let storage = await replayCsv.getState(rpc, node, contract_address, csv_path);
       let storage = await replayTransactions(transactions, rpc);
+      if(typeof targetFile !== 'undefined')
+          writeToJson(storage, targetFile);
     return {contract_code: contract_code, storage: storage};
   });
 };
@@ -48,6 +50,15 @@ const replayTransactions = async (transactions, rpc) => {
         });
     }
     return storage;
+};
+
+const writeToJson = (storage, targetFile) => {
+        fs.writeFile(targetFile, JSON.stringify(storage), (err) => {
+            if (err) {
+                console.error(err);
+                return;
+            }
+        });
 };
 
 module.exports.getContract = getContract;
