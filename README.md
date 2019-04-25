@@ -15,8 +15,85 @@ A detailed description can be found in the corresponding research paper: [Verifi
   * An unlocked account for deploying contracts and sending transactions on the target blockchain (Depending on the target chain, sufficient cryptocurrency may be requried)
   * [Mythril](https://github.com/ConsenSys/mythril-classic) needs to be installed for observing contract dependencies
 
-* Install dependencies using npm: `npm install`
+* Install dependencies using npm: `npm install -g`
+  * The global flag is only required if CLI is to be used globally
+  * Make sure the global `bin` folder is on your `$PATH` (see [here](https://mrmadhat.com/terminal/unable-use-globally-installed-npm-modules-switching-zsh/) for example)
 
+
+## Command line interface
+
+###  Get state variables of smart contract:
+```
+$ verismart help get-state
+Usage: verismart-get-state [options]
+
+Options:
+  -s, --source <required>           Source RPC
+  -c, --contract <required>         Source contract address
+  -d, --deployment_hash [optional]  Hash of the deployment transaction
+  -f, --file [optional]             Source file (csv) containing TXs to be replayed
+  -p, --parity                      Use parity compatible replay commands instead of geth
+  -o, --output [optional]           Save key pairs in json file
+  -h, --help                        output usage information
+```
+Example usage:
+```
+$ verismart get-state --source http://localhost:8545 --contract 0x5D73dDbe0d439125401B4ca43dc459d22B86ebf2
+```
+
+### Migrate Contract:
+```
+$ verismart help migrate
+Usage: verismart-migrate [options]
+
+Options:
+  -s, --source <required>           Source RPC
+  -c, --contract <required>         Source contract address
+  -d, --deployment_hash [optional]  Hash of the deployment transaction
+  -f, --file [optional]             Source file (csv) containing TXs to be replayed
+  -p, --parity                      Use parity compatible replay commands instead of geth
+  -o, --output [optional]           Save key pairs in json file
+  -t, --target <required>           Target RPC
+  -a, --address <required>          Address to use on target blockchain (unlocked)
+  -h, --help                        output usage information
+```
+Example usage:
+
+```
+$ verismart migrate \
+--source http://localhost:8546 \
+--contract 0xf8f22ab160e8a09fbf404a44139d9b5da936e3cb \
+--target http://localhost:8545 \
+--address 0x20a508640B446990c781Cd541B9a2828ACA3a350
+
+```
+
+### Verify equality of contract states:
+```
+verismart help verify
+Usage: verismart-verify [options]
+
+Options:
+  -s, --source <required>          Chaindata folder of source blockchain
+  -S, --source_address <required>  Contract address at source blockchain
+  -r, --source_root <required>     State root at target block of source blockchain
+  -t, --target <required>          Chaindata folder of target blockchain
+  -T, --target_address <required>  Contract address at target blockchain
+  -R, --target_root <required>     State root at target block of target blockchain
+  -h, --help                       output usage information
+```
+Example usage:
+```
+$ verismart verify \
+--source /source_node/geth/chaindata \
+--source_address f8f22ab160e8a09fbf404a44139d9b5da936e3cb \
+--source_root 0xdc59daa8805dd38d78e8b7c8385322cae05978b2f9f2a6388cd753c146331151 \
+--target /target_node/geth/chaindata \
+--target_address 5D73dDbe0d439125401B4ca43dc459d22B86ebf2 \
+--target_root 0x11a6993e095f0aba8faf1b5864bb8833ae468467f8dbe32ff2cfe04f01c72a4d
+```
+
+## Using node modules
 * Open node console and load packages: 
 ```
 const redeploy = require('./redeployContract.js')

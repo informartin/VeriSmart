@@ -1,16 +1,25 @@
 {
-  "name": "transactions",
-  "version": "1.0.0",
+  "name": "veri-smart",
+  "version": "0.1.2",
+  "preferGlobal": true,
   "description": "",
-  "main": "index.js",
+  "main": "cli/index",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "verismart": "node ./cli/index"
   },
-  "author": "",
-  "license": "ISC",
+  "bin": {
+    "verismart": "./cli/index",
+    "verismart-migrate": "./cli/index-migrate",
+    "verismart-get-state": "./cli/index-get-state",
+    "verismart-verify": "./cli/index-verify"
+  },
+  "author": "Martin Westerkamp",
+  "license": "LGPL-3.0",
   "dependencies": {
     "async": "^2.6.1",
     "async-promise-queue": "^1.0.4",
+    "commander": "^2.20.0",
     "fast-csv": "^2.4.1",
     "js-sha3": "^0.8.0",
     "keccak": "^1.4.0",

@@ -12,10 +12,10 @@ const portContract = (contract_address,
                       target_address,
                       {deployment_tx_hash,
                       csv_path,
-                      node}) => {
+                      node, targetFile}) => {
 
     const source_web3 = new Web3(source_rpc);
-    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node}).then(async contract => {
+    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, targetFile}).then(async contract => {
 
         const web3 = new Web3(target_rpc);
         // Mapping of referenced contract addresses on old and new rpc

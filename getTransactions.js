@@ -55,6 +55,7 @@ module.exports = {
     },
 
     getTransactionsFromCSV: async (csv_path) => {
+        console.log('--- Using CSV transaction retrieval ---');
         const file = fs.createReadStream(csv_path);
         let relatedTransactions = [];
         console.log('Parsing file: ', csv_path);

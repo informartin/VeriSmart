@@ -1,0 +1,31 @@
+#!/usr/bin/env node
+
+const program = require('commander');
+const sharedAttributes = require('./index-shared-attributes');
+const contractFunc = require('../getContract');
+const Web3 = require("web3");
+
+sharedAttributes(program);
+
+program
+    .parse(process.argv);
+
+const web3 = new Web3(program.source);
+
+const node = program.parity ? 'parity' : 'geth';
+
+contractFunc.getContract(
+    program.contract,
+    web3,
+    {
+        deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
+        csv_path: program.file ? program.file : undefined,
+        node: node,
+        targetFile: program.output ? program.output : undefined
+    })
+    .then(contract => {
+        const storage = contract.storage;
+        for (const [index, paddedValue] of Object.entries(storage)) {
+            console.log('key: ', index, ', value: ', paddedValue);
+        }
+    });
