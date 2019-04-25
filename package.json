@@ -1,12 +1,19 @@
 {
   "name": "veri-smart",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "preferGlobal": true,
   "description": "",
-  "main": "cli/index.js",
+  "main": "cli/index",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "verismart": "node ./cli/index"
   },
-  "bin": "./index.js",
+  "bin": {
+    "verismart": "./cli/index",
+    "verismart-migrate": "./cli/index-migrate",
+    "verismart-get-state": "./cli/index-get-state",
+    "verismart-verify": "./cli/index-verify"
+  },
   "author": "Martin Westerkamp",
   "license": "LGPL-3.0",
   "dependencies": {
