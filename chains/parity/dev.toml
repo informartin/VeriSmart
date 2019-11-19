@@ -1,0 +1,12 @@
+[parity]
+chain = "dev"
+base_path = "<INSERT HERE YOUR PATH WHERE YOU WANT TO STORE THE CHAIN>"
+[network]
+port = 30300
+[rpc]
+port = 8545
+apis = ["web3", "eth", "net", "personal", "parity", "parity_set", "traces", "rpc", "parity_accounts", "debug"]
+[websockets]
+port = 8546
+[footprint]
+fat_db = "on"
