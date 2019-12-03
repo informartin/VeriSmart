@@ -1,5 +1,6 @@
 const transactionsFunc = require('./getTransactions.js');
 const request = require('request-promise-native');
+const replayCsv = require('./replayCsv');
 const fs = require("fs");
 
 const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile}) => {
@@ -34,7 +35,8 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
           console.log('Transactions Received: ', transactions);
           const rpc = web3.currentProvider.host;
           //let storage = await replayCsv.getState(rpc, node, contract_address, csv_path);
-          let storage = await replayTransactions(transactions, rpc, node);
+          //let storage = await replayCsv.replayTransaction(transactions, rpc, node);
+          let storage = await replayCsv.getState(transactions, node, rpc, contract_address);
           if(typeof targetFile !== 'undefined')
               writeToJson(storage, targetFile);
         return {contract_code: contract_code, storage: storage};
