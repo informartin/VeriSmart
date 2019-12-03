@@ -1,4 +1,4 @@
-##How run a geth developer node
+### How run a geth developer node
 
 1. Install Geth (e.g. `brew install ethereum`)
 2. In your terminal, initialize the blockchain with (don't forget to specify your path): 
