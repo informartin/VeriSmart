@@ -7,7 +7,27 @@ const async = require("async");
 const Web3 = require('web3');
 const web3 = new Web3('ws://localhost:8546');
 
-const getState = async (rpc, node, contract_address, txPath) => {
+const getState = async (transactions, node, rpc, contract_address) => {
+    let storage = {};
+    let i = 0;
+    for (const tx of transactions) {
+        const response = await replayTransaction(tx, node, rpc, contract_address,i++);
+        if(response) {
+            const txStorage = response[tx];
+            console.log('txStorage: ', txStorage);
+            const keys = Object.keys(txStorage);
+            keys.forEach(key => {
+                if(txStorage[key] === '0x0000000000000000000000000000000000000000000000000000000000000000')
+                    delete storage[key.substring(2)];
+                else
+                    storage[key.substring(2)] = txStorage[key].substring(2);
+            });
+        }
+    }
+    return storage;
+};
+
+const getState_csv = async (rpc, node, contract_address, txPath) => {
     let transactions = [];
     let storage = {};
 
@@ -65,7 +85,7 @@ const getState = async (rpc, node, contract_address, txPath) => {
 };
 
 const getStateTofile = async (rpc, node, contract_address, txPath, targetPath) => {
-    const results = await getState(rpc, node, contract_address, txPath);
+    const results = await getState_csv(rpc, node, contract_address, txPath);
     const json = JSON.stringify(results);
     fs.writeFile(targetPath, json, 'utf8', () => console.log('Json written'));
 };
@@ -218,4 +238,5 @@ function strMapToObj(strMap) {
 }
 
 module.exports.getState = getState;
-//getState('http://localhost:8545', 'parity', '0xca29db4221c111888a7e80b12eac8a266da3ee0d', '/Users/martin/Programming/datasets/results_boleno_test.csv');
+module.exports.replayTransaction = replayTransaction;
+//getState_csv('http://localhost:8545', 'parity', '0xca29db4221c111888a7e80b12eac8a266da3ee0d', '/Users/martin/Programming/datasets/results_boleno_test.csv');

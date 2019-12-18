@@ -21,6 +21,7 @@ contractFunc.getContract(
         deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
         csv_path: program.file ? program.file : undefined,
         node: node,
+        fat_db: program.fatDb ? program.fatDb : false,
         targetFile: program.output ? program.output : undefined
     })
     .then(contract => {

@@ -12,10 +12,12 @@ const portContract = (contract_address,
                       target_address,
                       {deployment_tx_hash,
                       csv_path,
-                      node, targetFile}) => {
+                      node,
+                      fat_db,
+                      targetFile}) => {
 
     const source_web3 = new Web3(source_rpc);
-    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, targetFile}).then(async contract => {
+    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile}).then(async contract => {
 
         const web3 = new Web3(target_rpc);
         // Mapping of referenced contract addresses on old and new rpc
@@ -210,6 +212,7 @@ const setValuesOnInitContract = async (target_address, initContract, keys, value
         })
         .on('receipt', function (receipt) {
             console.log('Added storage values'); // contains the new contract address
+            console.log('Receipt: ', receipt);
             return receipt;
         });
 };
