@@ -19,3 +19,11 @@ To stop mining:
 
 Credits to [this tutorial](https://medium.com/blockchainbistro/set-up-a-private-ethereum-blockchain-and-deploy-your-first-solidity-smart-contract-on-the-caa8334c343d).  
 
+for initializing zktest.json as genesis:
+```
+geth --datadir chain init zktest.json
+```
+then to start the node:
+```
+geth --port 3000 --networkid 58342 --nodiscover --datadir="chain" --maxpeers=0 --rpc --rpcport 8543 --rpcaddr 127.0.0.1 --rpccorsdomain "*" --rpcapi "eth,net,web3" --nodiscover --allow-insecure-unlock --unlock 0xD51E15b8580D7D1dcBD8FcfD8B712E45807BC305 --password pass --etherbase 0xD51E15b8580D7D1dcBD8FcfD8B712E45807BC305 --mine --minerthreads=1
+```
