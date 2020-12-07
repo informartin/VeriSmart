@@ -32,8 +32,8 @@ const isStateEqual = (
     db2 = levelup(leveldown(chaindata2));
   const trie1 = new Trie(db1, state_root1);
   const trie2 = new Trie(db2, state_root2);
-  const addressHash1 = keccak256(new Buffer(contract_address1, 'hex'));
-  const addressHash2 = keccak256(new Buffer(contract_address2, 'hex'));
+  const addressHash1 = keccak256(Buffer.from(contract_address1, 'hex'));
+  const addressHash2 = keccak256(Buffer.from(contract_address2, 'hex'));
 
   return new Promise(function(resolve, reject) {
     trie1.get('0x' + addressHash1, function (err1, value1) {
