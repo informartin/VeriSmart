@@ -47,12 +47,12 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
 
 const getStorageFromParityFatDB = async (contract_address, web3) => {
     /**
-     * TODO these two values were used for testing, they can be raised later
-     * (keep in mind resultlength === limit is required for entering the while loop)
+     * TODO Permit passing value via CLI
      */
-    let resultlength = 1;
-    let limit = 1 ;
+    let resultlength = 100;
+    let limit = resultlength;
 
+    console.log("Retrieving state from Parity fat-db")
 
     let storage = {};
     let offset = null;
@@ -65,6 +65,7 @@ const getStorageFromParityFatDB = async (contract_address, web3) => {
             body: {"jsonrpc":"2.0", "method":"parity_listStorageKeys","params": [contract_address, limit, offset], "id":1}
         }).then(async (body) => {
                 resultlength = body.result.length;
+                console.log("Processing ", resultlength, " keys")
                 offset = body.result[body.result.length-1];
                 for(let i = 0; i < body.result.length; i++){
                     let key = body.result[i];

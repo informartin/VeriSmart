@@ -6,6 +6,7 @@ const verify = require('../checkValidity.js')
 program
     .option('-S, --source_rpc <required>', 'Source RPC')
     .option('-s, --source_contract_address <required>', 'Source contract address')
+    .option('-b, --source_block <optional>', 'Used block for comparing the states. Can be: latest, earliest, pending or a specific blocknumber. Default: latest.')
     .option('-T, --target_rpc <required>', 'Target RPC')
     .option('-t, --target_contract_address <required>', 'Target contract address')
     .parse(process.argv);
@@ -13,6 +14,7 @@ program
 verify.isStateEqual(
     program.source_rpc,
     program.source_contract_address,
+    program.source_block ? program.source_block : undefined,
     program.target_rpc,
     program.target_contract_address
 ).then(result => {
