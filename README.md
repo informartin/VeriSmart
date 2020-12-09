@@ -73,26 +73,22 @@ $ verismart migrate \
 ### Verify equality of contract states:
 ```
 verismart help verify
-Usage: verismart-verify [options]
+Usage: index-verify [options]
 
 Options:
-  -s, --source <required>          Chaindata folder of source blockchain
-  -S, --source_address <required>  Contract address at source blockchain
-  -r, --source_root <required>     State root at target block of source blockchain
-  -t, --target <required>          Chaindata folder of target blockchain
-  -T, --target_address <required>  Contract address at target blockchain
-  -R, --target_root <required>     State root at target block of target blockchain
-  -h, --help                       output usage information
+  -S, --source_rpc <required>               Source RPC
+  -s, --source_contract_address <required>  Source contract address
+  -T, --target_rpc <required>               Target RPC
+  -t, --target_contract_address <required>  Target contract address
+  -h, --help                                output usage information
 ```
 Example usage:
 ```
 $ verismart verify \
---source /source_node/geth/chaindata \
---source_address f8f22ab160e8a09fbf404a44139d9b5da936e3cb \
---source_root 0xdc59daa8805dd38d78e8b7c8385322cae05978b2f9f2a6388cd753c146331151 \
---target /target_node/geth/chaindata \
---target_address 5D73dDbe0d439125401B4ca43dc459d22B86ebf2 \
---target_root 0x11a6993e095f0aba8faf1b5864bb8833ae468467f8dbe32ff2cfe04f01c72a4d
+--source_rpc http://localhost:8545 \
+--source_contract_address f8f22ab160e8a09fbf404a44139d9b5da936e3cb \
+--target_rpc http://localhost:8546 \
+--target_contract_address 5D73dDbe0d439125401B4ca43dc459d22B86ebf2
 ```
 
 ## Using node modules
