@@ -208,7 +208,7 @@ const replayTransaction = async (transaction, node, rpc, contract_address, id) =
             }
         }
         else if (node === 'geth') {
-            console.log(body);
+            console.log(`function replayTransaction (geth node): ${JSON.stringify(body)}`);
             const txStorage = body.result.structLogs[body.result.structLogs.length - 1].storage;
             const keys = Object.keys(txStorage);
             let obj = {};

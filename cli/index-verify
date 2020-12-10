@@ -4,26 +4,24 @@ const program = require('commander');
 const verify = require('../checkValidity.js')
 
 program
-    .option('-s, --source <required>', 'Chaindata folder of source blockchain')
-    .option('-S, --source_address <required>', 'Contract address at source blockchain')
-    .option('-r, --source_root <required>', 'State root at target block of source blockchain')
-    .option('-t, --target <required>', 'Chaindata folder of target blockchain')
-    .option('-T, --target_address <required>', 'Contract address at target blockchain ')
-    .option('-R, --target_root <required>', 'State root at target block of target blockchain')
+    .option('-S, --source_rpc <required>', 'Source RPC')
+    .option('-s, --source_contract_address <required>', 'Source contract address')
+    .option('-T, --target_rpc <required>', 'Target RPC')
+    .option('-t, --target_contract_address <required>', 'Target contract address')
     .parse(process.argv);
 
-console.log(program.source);
-console.log(program.target);
-
 verify.isStateEqual(
-    program.source_address,
-    program.source,
-    program.source_root,
-    program.target_address,
-    program.target,
-    program.target_root).then(result => {
-        if(result)
-            console.log('The state of both smart contracts is equal');
-        else
-            console.log('The state of both smart contract IS NOT EQUAL');
+    program.source_rpc,
+    program.source_contract_address,
+    program.target_rpc,
+    program.target_contract_address
+).then(result => {
+    if(result)
+        console.log('The state of both smart contracts is equal');
+    else
+        console.log('The state of both smart contract IS NOT EQUAL');
+}).catch((reason) => {
+    console.log(`Something went wrong: ${reason}`);
+}).then(() => {
+    process.exit();
 });

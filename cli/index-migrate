@@ -26,4 +26,6 @@ redeployFunc.portContract(
         fat_db: program.fatDb ? program.fatDb : false,
         targetFile: program.output ? program.output : undefined
     }
-);
+).then(() => {
+    process.exit();
+});
