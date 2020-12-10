@@ -33,7 +33,7 @@ Options:
   -d, --deployment_hash [optional]  Hash of the deployment transaction
   -f, --file [optional]             Source file (csv) containing TXs to be replayed
   -p, --parity                      Use parity compatible replay commands instead of geth
-  -fd, --fat-db                     Use parity's feature fat-db for storage key retrieval
+  -q, --fat-db                      Use parity's feature fat-db for storage key retrieval
   -o, --output [optional]           Save key pairs in json file
   -h, --help                        output usage information
 ```
@@ -53,7 +53,7 @@ Options:
   -d, --deployment_hash [optional]  Hash of the deployment transaction
   -f, --file [optional]             Source file (csv) containing TXs to be replayed
   -p, --parity                      Use parity compatible replay commands instead of geth
-  -fd, --fat-db                     Use parity's feature fat-db for storage key retrieval
+  -q, --fat-db                      Use parity's feature fat-db for storage key retrieval
   -o, --output [optional]           Save key pairs in json file
   -t, --target <required>           Target RPC
   -a, --address <required>          Address to use on target blockchain (unlocked)
