@@ -167,13 +167,11 @@ const getReferences = async (
         if (web3_source_rpc.utils.isAddress(value)) {
             console.log(`Address found in storage: ${value}`);
 
-            if (!referenced_contract_addresses.includes(value)) {
-                const code = await web3.eth.getCode(value);
+            const code = await web3.eth.getCode(value);
 
-                if (code.length > 3) {
-                    referenced_contract_addresses[index] = paddedValue;
-                    referenced_contract_addresses_values.push(value);
-                }
+            if (code.length > 3) {
+                referenced_contract_addresses[index] = paddedValue;
+                referenced_contract_addresses_values.push(value);
             }
         }
     }
