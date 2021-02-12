@@ -3,6 +3,7 @@
 const program = require('commander');
 const sharedAttributes = require('./index-shared-attributes');
 const redeployFunc = require('../redeployContract');
+const Web3 = require('web3');
 
 sharedAttributes(program);
 
@@ -14,11 +15,18 @@ program
 
 const node = program.parity ? 'parity' : 'geth';
 
+// check if addresses have the right format.
+const addressFormat = new RegExp(/0x[\d\w]+/);
+if (!addressFormat.test(program.contract) || !addressFormat.test(program.address)) {
+    console.log('Addresses are not in the correct format. Please use "0x..." as a format.');
+    process.exit();
+}
+
 redeployFunc.portContract(
-    program.contract,
+    Web3.utils.toChecksumAddress(program.contract),
     program.source,
     program.target,
-    program.address,
+    Web3.utils.toChecksumAddress(program.address),
     {
         deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
         csv_path: program.file ? program.file : undefined,

@@ -1,5 +1,8 @@
+const { find } = require("async");
+const { exitOverride } = require("commander");
 const Web3 = require("web3");
 const contractFunc = require('./getContract.js');
+const fs = require('fs');
 
 const isStateEqual = async (
     source_rpc,
@@ -7,6 +10,7 @@ const isStateEqual = async (
     source_block,
     target_rpc,
     target_contract_address,
+    target_block,
     {
         node,
         fat_db
@@ -15,27 +19,55 @@ const isStateEqual = async (
     const web3_source_rpc = new Web3(source_rpc);
     const web3_target_rpc = new Web3(target_rpc);
 
+
+    // get the block were the contracts were deployed
+    let true_source_block = source_block !== undefined ? source_block : await findDeploymentBlock(source_contract_address, web3_source_rpc);
+    
+    let true_target_block;
+    if (target_block === undefined) {
+        const initContractAddress = await getInitContractAddress(target_contract_address, web3_target_rpc);
+        true_target_block = await findDeploymentBlockProxyContract(initContractAddress, web3_target_rpc);
+    } else {
+        true_target_block = target_block;
+    }
+
+    if (true_source_block === -1 || (await web3_source_rpc.eth.getCode(source_contract_address, true_source_block)).length < 3) {
+        console.log('Source contract is not deployed at the provided block or is generally not on the blockchain..');
+        process.exit(9);
+    }
+    if (true_target_block === -1 || (await web3_target_rpc.eth.getCode(target_contract_address, true_target_block)).length < 3) {
+        console.log('Target contract is not deployed at the provided block or is generally not on the blockchain.');
+        process.exit(9);
+    }
+    console.log(`Source contract deployed at block no ${true_source_block}`);
+    console.log(`Target contract (fully) deployed at block no ${true_target_block}`);
+
     // check for equality of contracts without references to other contracts
-    const source_contract_object = await web3_source_rpc.eth.getProof(source_contract_address, [], source_block ? source_block : 'latest');
-    const target_contract_object = await web3_target_rpc.eth.getProof(target_contract_address, [], 'earliest');
+    const source_contract_object = await web3_source_rpc.eth.getProof(source_contract_address, [], true_source_block);
+    const target_contract_object = await web3_target_rpc.eth.getProof(target_contract_address, [], true_target_block);
 
     const source_storage_hash = source_contract_object.storageHash;
     const target_storage_hash = target_contract_object.storageHash;
 
+    console.log(`contract storage hashes: ${source_storage_hash} vs. ${target_storage_hash}`);
+
     if (source_storage_hash === target_storage_hash) return true;
+
+    console.log('Contracts storageHash differ, will check for contract references...');
 
     // check if contracts differ because of referenced contracts in their states
     return await isStateOfReferencingContractsEqual(
         source_rpc,
         source_contract_address,
-        source_block ? source_block : 'latest',
+        true_source_block,
         target_rpc,
         target_contract_address,
+        true_target_block,
         {
             node,
             fat_db
         }
-    )
+    );
 };
 
 const isStateOfReferencingContractsEqual= async (
@@ -44,6 +76,7 @@ const isStateOfReferencingContractsEqual= async (
     source_block,
     target_rpc,
     target_contract_address,
+    target_block,
     {
         node,
         fat_db
@@ -56,7 +89,7 @@ const isStateOfReferencingContractsEqual= async (
     const source_contract = await contractFunc.getContract(source_contract_address, web3_source_rpc, { node, fat_db });
 
     // 1. check if there are any references to other contracts
-    const [source_contract_references_object, source_contract_references] = await getReferences(source_contract);
+    const [source_contract_references_object, source_contract_references] = await getReferences(source_contract, source_rpc);
     if (source_contract_references.length < 1) return false;
 
     const source_contract_static_references = await getStaticReferences(source_rpc, source_contract_address, source_contract_references);
@@ -65,7 +98,7 @@ const isStateOfReferencingContractsEqual= async (
     // 2. get target contract and check if references are the same
     const target_contract = await contractFunc.getContract(target_contract_address, web3_target_rpc, { node, fat_db });
 
-    const [target_contract_references_object, target_contract_references] = await getReferences(target_contract);
+    const [target_contract_references_object, target_contract_references] = await getReferences(target_contract, target_rpc);
     if (source_contract_references.length !== target_contract_references.length) return false;
 
     const target_contract_static_references = await getStaticReferences(target_rpc, target_contract_address, target_contract_references);
@@ -75,8 +108,8 @@ const isStateOfReferencingContractsEqual= async (
         const target_value = target_contract_references_object[key];
 
         // check if referenced contracts are the same (and without references)
-        const source_contract_object = await web3_source_rpc.eth.getProof(value, [], source_block ? source_block : 'latest'); // choosing earliest, since the referenced contract should have been deployed when source contract was ported to new dsl
-        const target_contract_object = await web3_target_rpc.eth.getProof(target_value, [], 'earliest');
+        const source_contract_object = await web3_source_rpc.eth.getProof(value, [], source_block); 
+        const target_contract_object = await web3_target_rpc.eth.getProof(target_value, [], target_block);
 
         const source_storage_hash = source_contract_object.storageHash;
         const target_storage_hash = target_contract_object.storageHash;
@@ -86,9 +119,10 @@ const isStateOfReferencingContractsEqual= async (
             const same = await isStateOfReferencingContractsEqual(
                 source_rpc,
                 value,
-                source_block ? source_block : 'latest',
+                source_block,
                 target_rpc,
                 target_value,
+                target_block,
                 {
                     node,
                     fat_db
@@ -105,7 +139,7 @@ const isStateOfReferencingContractsEqual= async (
     for (let [index, paddedValue] of Object.entries(source_contract_values)) {
         // getting the value at right time
         let right_source_paddedValue = await web3_source_rpc.eth.getStorageAt(source_contract_address, index, source_block);
-        let right_target_paddedValue = await web3_target_rpc.eth.getStorageAt(target_contract_address, target_index, 'earliest');
+        let right_target_paddedValue = await web3_target_rpc.eth.getStorageAt(target_contract_address, target_index, target_block);
         
         if (right_source_paddedValue !== right_target_paddedValue) return false;
     }
@@ -126,8 +160,8 @@ const isStateOfReferencingContractsEqual= async (
         const target_reference = target_contract_static_references[i];
 
         // check if referenced contracts are the same (and without references)
-        const source_contract_object = await web3_source_rpc.eth.getProof(source_reference, [], source_block ? source_block : 'latest'); // choosing earliest, since the referenced contract should have been deployed when source contract was ported to new dsl
-        const target_contract_object = await web3_target_rpc.eth.getProof(target_reference, [], 'earliest');
+        const source_contract_object = await web3_source_rpc.eth.getProof(source_reference, [], source_block); // choosing earliest, since the referenced contract should have been deployed when source contract was ported to new dsl
+        const target_contract_object = await web3_target_rpc.eth.getProof(target_reference, [], target_block);
 
         const source_storage_hash = source_contract_object.storageHash;
         const target_storage_hash = target_contract_object.storageHash;
@@ -137,9 +171,10 @@ const isStateOfReferencingContractsEqual= async (
             const same = await isStateOfReferencingContractsEqual(
                 source_rpc,
                 source_reference,
-                source_block ? source_block : 'latest',
+                source_block,
                 target_rpc,
                 target_reference,
+                target_block,
                 {
                     node,
                     fat_db
@@ -154,8 +189,9 @@ const isStateOfReferencingContractsEqual= async (
 };
 
 const getReferences = async (
-    contract
+    contract, rpc
 ) => {
+    const web3_rpc = new Web3(rpc);
     let storage = contract.storage;
     let referenced_contract_addresses = {};
     let referenced_contract_addresses_values = [];
@@ -164,7 +200,7 @@ const getReferences = async (
     for (let [index, paddedValue] of Object.entries(storage)) {
         // remove leading zeros
         const value = paddedValue.replace(/^0+/, '');
-        if (web3_source_rpc.utils.isAddress(value)) {
+        if (web3_rpc.utils.isAddress(value)) {
             console.log(`Address found in storage: ${value}`);
 
             const code = await web3.eth.getCode(value);
@@ -235,6 +271,62 @@ const getStaticReferences = async (
     }
 
     return static_references;
+};
+
+// binary search for block where contract was deployed
+const findDeploymentBlock = async (contract_address, web3) => {
+    let low = 0;
+    let high = (await web3.eth.getBlock('latest')).number;
+
+    let mid;
+    while (low <= high) {
+        mid = parseInt((low + high) / 2);
+
+        curr_code = await web3.eth.getCode(contract_address, mid);
+        // return mid if the smart contract was deployed on that block (previousBlock.getCode(smartContract) === none)
+        if (curr_code.length > 3 && (mid === 0 || (await web3.eth.getCode(contract_address, mid - 1)).length < 3) ) return mid;
+        
+        else if (curr_code.length > 3) high = mid - 1;
+        
+        else low = mid + 1;
+    }
+
+    return -1;
+};
+
+const getInitContractAddress = async (proxy_contract_address, web3) => {
+    console.log('Trying to find initContractAddress...');
+    const localProxyContractCode = JSON.parse(fs.readFileSync('contracts/ProxyContract.json', 'utf-8'));
+    const proxy_contract_code = await web3.eth.getCode(proxy_contract_address);
+    if (proxy_contract_code.length < 3) {
+        console.log('Given proxy_contract_address is not the address of a smart contract.');
+        process.exit(9);
+    }
+
+    const prefixRegex = RegExp('(0x[\\w\\d]+)2222222222222222222222222222222222222222([\\w\\d]+)8888888888888888888888888888888888888888[\\w\\d]+', 'g');
+    const prefixByteCode = prefixRegex.exec(localProxyContractCode['deployedBytecode']);
+    const initContractRegex = RegExp(`${prefixByteCode[1]}[\\w\\d]+${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`, 'g');
+    
+    const regexResult = initContractRegex.exec(proxy_contract_code);
+
+    if (regexResult === null) {
+        console.log('Could not extract initContractAddress..');
+        console.log(`Local Proxy Contract Code: ${localProxyContractCode['deployedBytecode']}`);
+        console.log(`Deployed Contract Code: ${proxy_contract_code}`);
+        process.exit(9);
+    }
+
+    console.log(`initContractAddress = ${regexResult[1]}`);
+
+    return regexResult[1];
+};
+
+const findDeploymentBlockProxyContract = async (initContractAddress, web3) => {
+    const localInitContractCode = JSON.parse(fs.readFileSync('contracts/InitContract.json', 'utf-8'));
+
+    const deployedInitContract = new web3.eth.Contract(localInitContractCode['abi'], initContractAddress);
+    const pastEvents = await deployedInitContract.getPastEvents('Status');
+    return pastEvents[0]['blockNumber'];
 };
 
 module.exports.isStateEqual = isStateEqual;

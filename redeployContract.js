@@ -192,8 +192,28 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         }
     }
     await setValuesOnInitContract(target_address, initInstance, keys, values);
-    return proxyAddress;
 
+    // selfdestruct initContract
+    await initInstance.methods.close().send({
+        from: target_address,
+        gas: 4700000,
+        gasPrice: '2000000000'
+    })
+        .on('error', function (error) {
+            console.log('Error while trying to destruct initContract: ', error)
+        })
+        .on('transactionHash', function (transactionHash) {
+            console.log('TxHash: ', transactionHash)
+        })
+        .on('receipt', function (receipt) {
+            console.log('InitContract got selfdestructed.');
+            console.log('Receipt: ', receipt);
+            return receipt;
+        })
+        .catch((error) => {
+            console.log('Error while trying to destruct initContract: ', error);
+        });
+    return proxyAddress;
 };
 
 const setValuesOnInitContract = async (target_address, initContract, keys, values) => {
