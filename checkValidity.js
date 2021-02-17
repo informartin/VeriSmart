@@ -92,7 +92,7 @@ const isStateOfReferencingContractsEqual= async (
     const [source_contract_references_object, source_contract_references] = await getReferences(source_contract, source_rpc);
     if (source_contract_references.length < 1) return false;
 
-    const source_contract_static_references = await getStaticReferences(source_rpc, source_contract_address, source_contract_references);
+    const source_contract_static_references = await getStaticReferences(source_contract.contract_code, source_contract_address);
     if (source_contract_static_references) return false;
 
     // 2. get target contract and check if references are the same
@@ -101,7 +101,7 @@ const isStateOfReferencingContractsEqual= async (
     const [target_contract_references_object, target_contract_references] = await getReferences(target_contract, target_rpc);
     if (source_contract_references.length !== target_contract_references.length) return false;
 
-    const target_contract_static_references = await getStaticReferences(target_rpc, target_contract_address, target_contract_references);
+    const target_contract_static_references = await getStaticReferences(target_contract.contract_code, target_contract_address);
     if (source_contract_static_references.length !== target_contract_static_references.length) return false;
 
     for (const [key, value] of Object.entries(source_contract_references_object)) {
@@ -231,46 +231,17 @@ const getContractValues = async (contract) => {
 }
 
 const getStaticReferences = async (
-    source_rpc,
-    contract_address,
-    contract_state_references
+    contract_code,
+    contract_address
 ) => {
-    static_references = [];
+    const evm = new EVM(contract_code);
+    console.log(`contrct address: ${contract_address}`);
+    let referencedContracts = evm.getOpcodes()
+        .filter( code => (code.name === 'PUSH20') )
+        .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
+        .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address) );
 
-    // remove http://
-    const mythril_rpc = source_rpc.replace(/(^\w+:|^)\/\//, '');
-
-    // call mythrill to receive referenced contracts
-    // log is written to stderr, forward to stdout and pipe to grep
-    // use grep's perl regex as ES2017 doesn't support lookbehind regexes
-    const command =
-        'myth --rpc ' +
-        mythril_rpc +
-        ' -xa ' +
-        contract_address +
-        ' -l --max-depth 8 -v1 2>&1 >/dev/null | ' +
-        'grep -oP \'(?<=INFO:root:Dependency address: ).*$\'';
-    console.log('command: ', command);
-    let execution_result = '';
-    try {
-        let stdout = exec(command);
-        execution_result = stdout.toString('utf8');
-        console.log('STD: ', execution_result);
-    } catch (ex) {
-        console.log('No dependency found');
-    }
-    let referencedContracts = Array.from(new Set(execution_result.split(/\r\n|\r|\n/g)));
-    referencedContracts.pop();
-
-    // get all static reference contracts in byte code
-    for (const curr_contract of referencedContracts) {
-        const value = curr_contract.substring(2).replace(/^0+/, '');
-        if (!contract_state_references.includes(value)) {
-            static_references.push(value);
-        }
-    }
-
-    return static_references;
+    return referencedContracts;
 };
 
 // binary search for block where contract was deployed
