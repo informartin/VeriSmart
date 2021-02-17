@@ -64,16 +64,21 @@ const portContract = (contract_address,
             }
         }
 
+        // getting all static references
         const evm = new EVM(contract_code);
-        console.log(`contrct address: ${contract_address}`);
-        let referencedContracts = evm.getOpcodes()
+        let referencedContracts = await evm.getOpcodes()
             .filter( code => (code.name === 'PUSH20') )
             .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
-            .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address) );
+            .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
+        // filter out all EOAs
+        referencedContracts = await referencedContracts.filter(async (address) => {
+            const referenced_address_code = await web3.eth.getCode(address);
+            return referenced_address_code.length > 3
+        });
 
         for (const contract of referencedContracts) {
             console.log('--- Reference found in bytecode, migrating: ', contract, ' ---');
-            const receipt = await portContract(contract, source_rpc, target_rpc, target_address, code_size, 
+            const contractAddress = await portContract(contract, source_rpc, target_rpc, target_address, code_size, 
                 {
                     deployment_tx_hash,
                     csv_path,
@@ -81,10 +86,9 @@ const portContract = (contract_address,
                     fat_db,
                     targetFile
             });
-            const contractAddress = (receipt._address + "").substring(2);
-            console.log(`Replacing ${contract.substring(2)} with ${contractAddress}`);
-            const regex = new RegExp(contract.substring(2));
-            contract_code.replace(regex, contractAddress);
+            console.log(`Replacing ${contract.substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
+            const regex = new RegExp(contract.substring(2).toLowerCase());
+            contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
         }
 
         // TODO: Clean up this mess
