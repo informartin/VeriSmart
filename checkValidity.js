@@ -1,5 +1,3 @@
-const { find } = require("async");
-const { exitOverride } = require("commander");
 const Web3 = require("web3");
 const contractFunc = require('./getContract.js');
 const fs = require('fs');
@@ -18,7 +16,6 @@ const isStateEqual = async (
 ) => {
     const web3_source_rpc = new Web3(source_rpc);
     const web3_target_rpc = new Web3(target_rpc);
-
 
     // get the block were the contracts were deployed
     let true_source_block = source_block !== undefined ? source_block : await findDeploymentBlock(source_contract_address, web3_source_rpc);
@@ -47,24 +44,27 @@ const isStateEqual = async (
     const target_contract_object = await web3_target_rpc.eth.getProof(target_contract_address, [], true_target_block);
 
     const source_storage_hash = source_contract_object.storageHash;
+    const source_code_hash = source_contract_object.codeHash;
     const target_storage_hash = target_contract_object.storageHash;
-    
-    //TODO CODEHASH AUCH NOCH VERGLEICHEN!
+    const target_code_hash = target_contract_object.codeHash;
 
     console.log(`contract storage hashes: ${source_storage_hash} vs. ${target_storage_hash}`);
+    console.log(`contract code hashes: ${source_code_hash} vs. ${target_code_hash}`);
 
-    if (source_storage_hash === target_storage_hash) return true;
+    if (source_storage_hash === target_storage_hash && source_code_hash === target_code_hash) return true;
 
-    console.log('Contracts storageHash differ, will check for contract references...');
+    console.log('Contracts storageHash or codeHash differ, will check for contract references...');
 
     // check if contracts differ because of referenced contracts in their states
     return await isStateOfReferencingContractsEqual(
         source_rpc,
         source_contract_address,
         true_source_block,
+        source_contract_object,
         target_rpc,
         target_contract_address,
         true_target_block,
+        target_contract_object,
         {
             node,
             fat_db
@@ -76,9 +76,11 @@ const isStateOfReferencingContractsEqual= async (
     source_rpc,
     source_contract_address,
     source_block,
+    source_contract_proof,
     target_rpc,
     target_contract_address,
     target_block,
+    target_contract_proof,
     {
         node,
         fat_db
@@ -89,103 +91,114 @@ const isStateOfReferencingContractsEqual= async (
 
     // getting source contract
     const source_contract = await contractFunc.getContract(source_contract_address, web3_source_rpc, { node, fat_db });
-
-    // 1. check if there are any references to other contracts
-    const [source_contract_references_object, source_contract_references] = await getReferences(source_contract, source_rpc);
-    if (source_contract_references.length < 1) return false;
-
-    const source_contract_static_references = await getStaticReferences(web3_source_rpc, source_contract.contract_code, source_contract_address);
-    if (source_contract_static_references) return false;
-
-    // 2. get target contract and check if references are the same
     const target_contract = await contractFunc.getContract(target_contract_address, web3_target_rpc, { node, fat_db });
 
-    const [target_contract_references_object, target_contract_references] = await getReferences(target_contract, target_rpc);
-    if (source_contract_references.length !== target_contract_references.length) return false;
+    // 1. check if storageHash is different. 
+    if (source_contract_proof.storageHash !== target_contract_proof.storageHash) {
+        // 1.1 check if possible state references to other contracts are the same
+        const [source_contract_references_object, source_contract_references] = await getReferences(source_contract, source_rpc);
+        if (source_contract_references.length < 1) return false;
 
-    const target_contract_static_references = await getStaticReferences(web3_target_rpc, target_contract.contract_code, target_contract_address);
-    if (source_contract_static_references.length !== target_contract_static_references.length) return false;
+        const [target_contract_references_object, target_contract_references] = await getReferences(target_contract, target_rpc);
+        if (source_contract_references.length !== target_contract_references.length) return false;
 
-    for (const [key, value] of Object.entries(source_contract_references_object)) {
-        const target_value = target_contract_references_object[key];
+        for (const [key, value] of Object.entries(source_contract_references_object)) {
+            const target_value = target_contract_references_object[key];
+    
+            // check if referenced contracts are the same (and without references)
+            const source_contract_object = await web3_source_rpc.eth.getProof(value, [], source_block); 
+            const target_contract_object = await web3_target_rpc.eth.getProof(target_value, [], target_block);
+    
+            const source_storage_hash = source_contract_object.storageHash;
+            const source_code_hash = source_contract_object.codeHash;
+            const target_storage_hash = target_contract_object.storageHash;
+            const target_code_hash = target_contract_object.codeHash;
+            
+            // if referenced contracts are not the same, check if they have references to other contracts
+            if (source_storage_hash !== target_storage_hash || source_code_hash !== target_code_hash) {
+                const same = await isStateOfReferencingContractsEqual(
+                    source_rpc,
+                    value,
+                    source_block,
+                    source_contract_object,
+                    target_rpc,
+                    target_value,
+                    target_block,
+                    target_contract_object,
+                    {
+                        node,
+                        fat_db
+                    }
+                );
+    
+                if (!same) return false;
+            }
+        }
 
-        // check if referenced contracts are the same (and without references)
-        const source_contract_object = await web3_source_rpc.eth.getProof(value, [], source_block); 
-        const target_contract_object = await web3_target_rpc.eth.getProof(target_value, [], target_block);
+        // 1.2 check if other state values are the same
+        const source_contract_values = getContractValues(source_contract);
 
-        const source_storage_hash = source_contract_object.storageHash;
-        const target_storage_hash = target_contract_object.storageHash;
-        // TODO CODEHASH VERGLEICHEN
-        
-        // if referenced contracts are not the same, check if they have references to other contracts
-        if (source_storage_hash !== target_storage_hash) {
-            const same = await isStateOfReferencingContractsEqual(
-                source_rpc,
-                value,
-                source_block,
-                target_rpc,
-                target_value,
-                target_block,
-                {
-                    node,
-                    fat_db
-                }
-            );
-
-            if (!same) return false;
+        for (let [index, paddedValue] of Object.entries(source_contract_values)) {
+            // getting the value at right time (getContract gets the contract at the latest block)
+            // TODO getStorageAt -> Batch
+            let right_source_paddedValue = await web3_source_rpc.eth.getStorageAt(source_contract_address, index, source_block);
+            let right_target_paddedValue = await web3_target_rpc.eth.getStorageAt(target_contract_address, index, target_block);
+            
+            if (right_source_paddedValue !== right_target_paddedValue) return false;
         }
     }
+    
+    // 2. check if possible static references to other contracts are the same
+    if (source_contract_proof.codeHash !== target_contract_proof.codeHash) {
+        const source_contract_static_references = await getStaticReferences(web3_source_rpc, source_contract.contract_code, source_contract_address);
+        if (source_contract_static_references) return false;
 
-    // 3. go through values of source contract (except contract references) and compare them to target contract
-    const source_contract_values = getContractValues(source_contract);
+        const target_contract_static_references = await getStaticReferences(web3_target_rpc, target_contract.contract_code, target_contract_address);
+        if (source_contract_static_references.length !== target_contract_static_references.length) return false;
 
-    for (let [index, paddedValue] of Object.entries(source_contract_values)) {
-        // getting the value at right time
-        // TODO getStorageAt -> Batch
-        let right_source_paddedValue = await web3_source_rpc.eth.getStorageAt(source_contract_address, index, source_block);
-        let right_target_paddedValue = await web3_target_rpc.eth.getStorageAt(target_contract_address, target_index, target_block);
-        
-        if (right_source_paddedValue !== right_target_paddedValue) return false;
-    }
+        // 2.1 compare static references in bytecode
+        const source_contract_code = source_contract.contract_code;
+        let target_contract_code = target_contract.contract_code;
 
-    // 4. compare static references in bytecode
-    const source_contract_code = source_contract.contract_code;
-    let target_contract_code = target_contract.contract_code;
+        for (const i in source_contract_static_references) {
+            target_contract_code = target_contract_code.replace(target_contract_static_references[i], source_contract_static_references[i]);
+        }
 
-    for (const i in source_contract_static_references) {
-        target_contract_code = target_contract_code.replace(target_contract_static_references[i], source_contract_static_references[i]);
-    }
+        if (source_contract_code !== target_contract_code) return false;
 
-    if (source_contract_code !== target_contract_code) return false;
+        // 2.2 compare contracts in static references
+        for (const i in source_contract_static_references) {
+            const source_reference = source_contract_static_references[i];
+            const target_reference = target_contract_static_references[i];
 
-    // 5. compare contracts in static references
-    for (const i in source_contract_static_references) {
-        const source_reference = source_contract_static_references[i];
-        const target_reference = target_contract_static_references[i];
+            // check if referenced contracts are the same (and without references)
+            const source_contract_object = await web3_source_rpc.eth.getProof(source_reference, [], source_block); 
+            const target_contract_object = await web3_target_rpc.eth.getProof(target_reference, [], target_block);
 
-        // check if referenced contracts are the same (and without references)
-        const source_contract_object = await web3_source_rpc.eth.getProof(source_reference, [], source_block); // choosing earliest, since the referenced contract should have been deployed when source contract was ported to new dsl
-        const target_contract_object = await web3_target_rpc.eth.getProof(target_reference, [], target_block);
+            const source_storage_hash = source_contract_object.storageHash;
+            const source_code_hash = source_contract_object.codeHash;
+            const target_storage_hash = target_contract_object.storageHash;
+            const target_code_hash = target_contract_object.codeHash;
+            
+            // if referenced contracts are not the same, check if they have references to other contracts
+            if (source_storage_hash !== target_storage_hash || source_code_hash !== target_code_hash) {
+                const same = await isStateOfReferencingContractsEqual(
+                    source_rpc,
+                    source_reference,
+                    source_block,
+                    source_contract_object,
+                    target_rpc,
+                    target_reference,
+                    target_block,
+                    target_contract_object,
+                    {
+                        node,
+                        fat_db
+                    }
+                );
 
-        const source_storage_hash = source_contract_object.storageHash;
-        const target_storage_hash = target_contract_object.storageHash;
-        
-        // if referenced contracts are not the same, check if they have references to other contracts
-        if (source_storage_hash !== target_storage_hash) {
-            const same = await isStateOfReferencingContractsEqual(
-                source_rpc,
-                source_reference,
-                source_block,
-                target_rpc,
-                target_reference,
-                target_block,
-                {
-                    node,
-                    fat_db
-                }
-            );
-
-            if (!same) return false;
+                if (!same) return false;
+            }
         }
     }
 
@@ -284,9 +297,9 @@ const getInitContractAddress = async (proxy_contract_address, web3) => {
         process.exit(9);
     }
 
-    const prefixRegex = RegExp('(0x[\\w\\d]+)[2]{40}([\\w\\d]+)[8]{40}[\\w\\d]+', 'g');
+    const prefixRegex = RegExp('(0x[\\w\\d]+)[2]{40}([\\w\\d]+)[8]{40}[\\w\\d]+');
     const prefixByteCode = prefixRegex.exec(localProxyContractCode['deployedBytecode']);
-    const initContractRegex = RegExp(`${prefixByteCode[1]}[\\w\\d]+${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`, 'g');
+    const initContractRegex = RegExp(`${prefixByteCode[1]}[\\w\\d]+${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`);
     
     const regexResult = initContractRegex.exec(proxy_contract_code);
 
