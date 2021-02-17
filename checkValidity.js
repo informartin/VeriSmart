@@ -303,7 +303,7 @@ const getInitContractAddress = async (proxy_contract_address, web3) => {
         process.exit(9);
     }
 
-    const prefixRegex = RegExp('(0x[\\w\\d]+)2222222222222222222222222222222222222222([\\w\\d]+)8888888888888888888888888888888888888888[\\w\\d]+', 'g');
+    const prefixRegex = RegExp('(0x[\\w\\d]+)[2]{40}([\\w\\d]+)[8]{40}[\\w\\d]+', 'g');
     const prefixByteCode = prefixRegex.exec(localProxyContractCode['deployedBytecode']);
     const initContractRegex = RegExp(`${prefixByteCode[1]}[\\w\\d]+${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`, 'g');
     
