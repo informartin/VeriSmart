@@ -48,6 +48,8 @@ const isStateEqual = async (
 
     const source_storage_hash = source_contract_object.storageHash;
     const target_storage_hash = target_contract_object.storageHash;
+    
+    //TODO CODEHASH AUCH NOCH VERGLEICHEN!
 
     console.log(`contract storage hashes: ${source_storage_hash} vs. ${target_storage_hash}`);
 
@@ -92,7 +94,7 @@ const isStateOfReferencingContractsEqual= async (
     const [source_contract_references_object, source_contract_references] = await getReferences(source_contract, source_rpc);
     if (source_contract_references.length < 1) return false;
 
-    const source_contract_static_references = await getStaticReferences(source_contract.contract_code, source_contract_address);
+    const source_contract_static_references = await getStaticReferences(web3_source_rpc, source_contract.contract_code, source_contract_address);
     if (source_contract_static_references) return false;
 
     // 2. get target contract and check if references are the same
@@ -101,7 +103,7 @@ const isStateOfReferencingContractsEqual= async (
     const [target_contract_references_object, target_contract_references] = await getReferences(target_contract, target_rpc);
     if (source_contract_references.length !== target_contract_references.length) return false;
 
-    const target_contract_static_references = await getStaticReferences(target_contract.contract_code, target_contract_address);
+    const target_contract_static_references = await getStaticReferences(web3_target_rpc, target_contract.contract_code, target_contract_address);
     if (source_contract_static_references.length !== target_contract_static_references.length) return false;
 
     for (const [key, value] of Object.entries(source_contract_references_object)) {
@@ -113,6 +115,7 @@ const isStateOfReferencingContractsEqual= async (
 
         const source_storage_hash = source_contract_object.storageHash;
         const target_storage_hash = target_contract_object.storageHash;
+        // TODO CODEHASH VERGLEICHEN
         
         // if referenced contracts are not the same, check if they have references to other contracts
         if (source_storage_hash !== target_storage_hash) {
@@ -138,6 +141,7 @@ const isStateOfReferencingContractsEqual= async (
 
     for (let [index, paddedValue] of Object.entries(source_contract_values)) {
         // getting the value at right time
+        // TODO getStorageAt -> Batch
         let right_source_paddedValue = await web3_source_rpc.eth.getStorageAt(source_contract_address, index, source_block);
         let right_target_paddedValue = await web3_target_rpc.eth.getStorageAt(target_contract_address, target_index, target_block);
         
@@ -231,15 +235,21 @@ const getContractValues = async (contract) => {
 }
 
 const getStaticReferences = async (
+    web3_rpc,
     contract_code,
     contract_address
 ) => {
     const evm = new EVM(contract_code);
-    console.log(`contrct address: ${contract_address}`);
     let referencedContracts = evm.getOpcodes()
         .filter( code => (code.name === 'PUSH20') )
         .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
         .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address) );
+
+    // filter out all EOAs
+    referencedContracts = await referencedContracts.filter(async (address) => {
+        const referenced_address_code = await web3_rpc.eth.getCode(address);
+        return referenced_address_code.length > 3
+    });
 
     return referencedContracts;
 };
