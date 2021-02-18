@@ -88,7 +88,7 @@ const portContract = (contract_address,
             });
             console.log(`Replacing ${contract.substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
             const regex = new RegExp(contract.substring(2).toLowerCase());
-            contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
+            contract_code = contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
         }
 
         // TODO: Clean up this mess
