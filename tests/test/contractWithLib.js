@@ -11,7 +11,7 @@ contract('ContractWithLib', (accounts) => {
         const contractWithLib = await ContractWithLib.deployed();
 
         // saving eth balance of deploying address in state of source contract
-        const sourceEthBalance = await contractWithLib.getBalanceInEth.call({ from: accounts[0] });
+        const sourceEthBalance = await contractWithLib.getBalanceInEth.call(accounts[0]);
 
         let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
@@ -27,7 +27,7 @@ contract('ContractWithLib', (accounts) => {
         const target_web3 = new Web3(target_dsl);
         const targetContractWithLib = new target_web3.eth.Contract(ContractWithLib.abi, web3.utils.toChecksumAddress(proxyAddress));
 
-        const target_b = await targetContractWithLib.methods.getBalanceInEth().call({ from: accounts[0] });
+        const target_b = await targetContractWithLib.methods.getBalanceInEth(accounts[0]).call();
 
         expect(target_b.toString()).to.equal(sourceEthBalance.toString(), 'balance in eth on source chain is note the same as on target chain');
 
