@@ -120,11 +120,12 @@ const isStateOfReferencingContractsEqual= async (
         console.log(target_contract_references);
 
         console.log('Checking equality of contract references:');
-        for (const [key, value] of Object.entries(source_contract_references_object)) {
-            const target_value = target_contract_references_object[key];
+        for (const [key, paddedValue] of Object.entries(source_contract_references_object)) {
+            const sourceValue = paddedValue.replace(/^0+/, '');
+            const target_value = target_contract_references_object[key].replace(/^0+/, '');
     
             // check if referenced contracts are the same (and without references)
-            const source_contract_object = await web3_source_rpc.eth.getProof(value, [], source_block); 
+            const source_contract_object = await web3_source_rpc.eth.getProof(sourceValue, [], source_block); 
             const target_contract_object = await web3_target_rpc.eth.getProof(target_value, [], target_block);
     
             const source_storage_hash = source_contract_object.storageHash;
@@ -132,7 +133,7 @@ const isStateOfReferencingContractsEqual= async (
             const target_storage_hash = target_contract_object.storageHash;
             const target_code_hash = target_contract_object.codeHash;
 
-            console.log(`Comparing source reference ${value} to ${target_value}`);
+            console.log(`Comparing source reference ${sourceValue} to ${target_value}`);
             console.log(`contract storage hashes: ${source_storage_hash} vs. ${target_storage_hash}`);
             console.log(`contract code hashes: ${source_code_hash} vs. ${target_code_hash}`);
             
@@ -142,11 +143,11 @@ const isStateOfReferencingContractsEqual= async (
             console.log('Hashes are not the same. Checking if referenced contracts have references as well.');
             const same = await isStateOfReferencingContractsEqual(
                 source_rpc,
-                value,
+                Web3.utils.toChecksumAddress(`0x${sourceValue}`),
                 source_block,
                 source_contract_object,
                 target_rpc,
-                target_value,
+                Web3.utils.toChecksumAddress(`0x${target_value}`),
                 target_block,
                 target_contract_object,
                 {
@@ -160,7 +161,7 @@ const isStateOfReferencingContractsEqual= async (
 
         // 1.2 check if other state values are the same
         console.log('Comparing non-references values in contracts');
-        const source_contract_values = getContractValues(source_contract);
+        const source_contract_values = getContractValues(source_contract, web3_source_rpc);
 
         for (let [index, paddedValue] of Object.entries(source_contract_values)) {
             // getting the value at right time (getContract gets the contract at the latest block)
@@ -266,7 +267,7 @@ const getReferences = async (
         if (web3_rpc.utils.isAddress(value)) {
             console.log(`Address found in storage: ${value}`);
 
-            const code = await web3.eth.getCode(value);
+            const code = await web3_rpc.eth.getCode(value);
 
             if (code.length > 3) {
                 referenced_contract_addresses[index] = paddedValue;
@@ -278,7 +279,7 @@ const getReferences = async (
     return [referenced_contract_addresses, referenced_contract_addresses_values];
 };
 
-const getContractValues = async (contract) => {
+const getContractValues = async (contract, web3_rpc) => {
     let storage = contract.storage;
     let values = {};
 
@@ -286,7 +287,7 @@ const getContractValues = async (contract) => {
     for (let [index, paddedValue] of Object.entries(storage)) {
         // remove leading zeros
         const value = paddedValue.replace(/^0+/, '');
-        if (!web3_source_rpc.utils.isAddress(value) || await web3.eth.getCode(value) < 3) {
+        if (!web3_rpc.utils.isAddress(value) || await web3_rpc.eth.getCode(value) < 3) {
             values[index] = paddedValue;
         }
     }

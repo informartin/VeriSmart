@@ -1,7 +1,7 @@
 version: '3.3'
 services:
   openethereum:
-    container_name: verismart2
+    container_name: verismart_test_chain_2
     image: openethereum/openethereum
     volumes:
       - ./:/home/openethereum/.local/share/openethereum

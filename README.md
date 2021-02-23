@@ -126,3 +126,9 @@ verify.isStateEqual(
     '/target_node/geth/chaindata',                                          // Chaindata folder of target blockchain
     '0x8281211c8c44a443e6a36da97b62085f68c0f00ca5ac75a055594aaa131f702f');  // State root at target block of target blockchain
 ```
+
+# Development
+
+To execute the tests you need to have `docker` as well as `docker-compose` installed on your system.
+
+Execute the tests by simply typing `npm test` at the root of the project.
