@@ -11,9 +11,9 @@ contract('ContractWithLib', (accounts) => {
         const contractWithLib = await ContractWithLib.deployed();
 
         // saving eth balance of deploying address in state of source contract
-        const sourceEthBalance = await simpleStorageInstance.getBalanceInEth.call({ from: accounts[0] });
+        const sourceEthBalance = await contractWithLib.getBalanceInEth.call({ from: accounts[0] });
 
-        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${accounts[0]} --parity`;
+        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
@@ -31,7 +31,7 @@ contract('ContractWithLib', (accounts) => {
 
         expect(target_b.toString()).to.equal(sourceEthBalance.toString(), 'balance in eth on source chain is note the same as on target chain');
 
-        const verifyCommand = `./cli/index verify --source_rpc ${source_dsl} --source_contract_address ${simpleStorageInstance.address} --target_rpc ${target_dsl} --target_contract_address ${proxyAddress} --parity`;
+        const verifyCommand = `./cli/index verify --source_rpc ${source_dsl} --source_contract_address ${contractWithLib.address} --target_rpc ${target_dsl} --target_contract_address ${proxyAddress} --parity`;
         console.log(`Executing: \n${verifyCommand}`);
         output = execSync(verifyCommand, { cwd: './../' });
         console.log(output.toString());
