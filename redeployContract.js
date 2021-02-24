@@ -182,6 +182,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         keys.push('0x' + key);
         values.push('0x' + contract_state[key]);
         if(((i+1) % 40) == 0) {
+            // TODO check if values were migrated, if not then write to json and exit program
             await setValuesOnInitContract(target_address, initInstance, keys, values);
             keys = [];
             values = [];
@@ -208,6 +209,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         .catch((error) => {
             console.log('Error while trying to destruct initContract: ', error);
         });
+    // TODO write successfull migration to json
     return proxyAddress;
 
 };
@@ -215,6 +217,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
 const setValuesOnInitContract = async (target_address, initContract, keys, values) => {
     console.log('keys: ', keys);
     console.log('values: ', values);
+    if (keys.length < 1) return "";
     await initContract.methods.setValue(keys, values).send({
         from: target_address,
         gas: 4700000,
@@ -231,6 +234,7 @@ const setValuesOnInitContract = async (target_address, initContract, keys, value
             console.log('Receipt: ', receipt);
             return receipt;
         });
+        // TODO return bool if setValue failed or not
 };
 
 const deployLogic = async (web3, target_address, deploy_code) => {
