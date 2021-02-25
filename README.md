@@ -85,9 +85,9 @@ Example usage:
 ```
 $ verismart verify \
 --source_rpc http://localhost:8545 \
---source_contract_address f8f22ab160e8a09fbf404a44139d9b5da936e3cb \
+--source_contract_address 0x20a508640B446990c781Cd541B9a2828ACA3a350 \
 --target_rpc http://localhost:8546 \
---target_contract_address 5D73dDbe0d439125401B4ca43dc459d22B86ebf2
+--target_contract_address 0x5D73dDbe0d439125401B4ca43dc459d22B86ebf2
 ```
 
 ## Using node modules
@@ -125,3 +125,9 @@ verify.isStateEqual(
     '/target_node/geth/chaindata',                                          // Chaindata folder of target blockchain
     '0x8281211c8c44a443e6a36da97b62085f68c0f00ca5ac75a055594aaa131f702f');  // State root at target block of target blockchain
 ```
+
+# Development
+
+To execute the tests you need to have `docker` as well as `docker-compose` installed on your system.
+
+Execute the tests by simply typing `npm test` at the root of the project.

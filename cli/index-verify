@@ -2,24 +2,43 @@
 
 const program = require('commander');
 const verify = require('../checkValidity.js')
+const Web3 = require('web3');
 
 program
     .option('-S, --source_rpc <required>', 'Source RPC')
     .option('-s, --source_contract_address <required>', 'Source contract address')
+    .option('-b, --source_block [optional]', 'Used block for comparing the states. Can be: latest, earliest, pending or a specific blocknumber.')
     .option('-T, --target_rpc <required>', 'Target RPC')
     .option('-t, --target_contract_address <required>', 'Target contract address')
+    .option('-c, --target_block [optional]', 'Used block for comparing the states. Can be: latest, earliest, pending or a specific blocknumber.')
+    .option('-q, --fat_db [optional]', "Use key retrieval from parity's fat_db feature")
+    .option('-p, --parity', 'Use parity compatible replay commands instead of geth')
     .parse(process.argv);
+
+// check if addresses have the right format.
+const addressFormat = new RegExp(/0x[\d\w]+/);
+if (!addressFormat.test(program.source_contract_address) || !addressFormat.test(program.target_contract_address)) {
+    console.log('Contract addresses are not in the correct format. Please use "0x..." as a format.');
+    process.exit();
+}
 
 verify.isStateEqual(
     program.source_rpc,
-    program.source_contract_address,
+    Web3.utils.toChecksumAddress(program.source_contract_address),
+    program.source_block ? program.source_block : undefined,
     program.target_rpc,
-    program.target_contract_address
+    Web3.utils.toChecksumAddress(program.target_contract_address), 
+    program.target_block ? program.target_block : undefined,
+    { 
+        node: program.parity ? 'parity' : 'geth',
+        fat_db: program.fat_db ? true : false
+    }
+
 ).then(result => {
     if(result)
-        console.log('The state of both smart contracts is equal');
+        console.log('The states of the smart contracts are equal');
     else
-        console.log('The state of both smart contract IS NOT EQUAL');
+        console.log('The states of the smart contract ARE NOT EQUAL');
 }).catch((reason) => {
     console.log(`Something went wrong: ${reason}`);
 }).then(() => {

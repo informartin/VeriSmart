@@ -43,7 +43,7 @@ const portContract = (contract_address,
                     // Contracts return entire code, i.e. > 3
                     if (code.length > 3) {
                         console.log('--- Reference found in state, migrating: ', value, ' ---');
-                        const address = await portContract(`0x${Web3.utils.toChecksumAddress(value)}`, source_rpc, target_rpc, target_address, code_size, 
+                        const address = await portContract(Web3.utils.toChecksumAddress(value), source_rpc, target_rpc, target_address, code_size, 
                             {
                                 deployment_tx_hash,
                                 csv_path,
@@ -189,6 +189,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         }
     }
     await setValuesOnInitContract(target_address, initInstance, keys, values);
+
     // selfdestruct initContract
     await initInstance.methods.close().send({
         from: target_address,
@@ -209,9 +210,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         .catch((error) => {
             console.log('Error while trying to destruct initContract: ', error);
         });
-    // TODO write successfull migration to json
     return proxyAddress;
-
 };
 
 const setValuesOnInitContract = async (target_address, initContract, keys, values) => {

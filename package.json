@@ -5,7 +5,7 @@
   "description": "",
   "main": "cli/index",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "cd tests && bash exec_tests.sh",
     "verismart": "node ./cli/index"
   },
   "bin": {
@@ -34,5 +34,8 @@
     "request-promise-native": "^1.0.9",
     "rlp": "^2.2.6",
     "web3": "^1.3.0"
+  },
+  "devDependencies": {
+    "truffle": "^5.1.67"
   }
 }
