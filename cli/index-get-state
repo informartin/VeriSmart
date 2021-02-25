@@ -10,12 +10,19 @@ sharedAttributes(program);
 program
     .parse(process.argv);
 
+// check if addresses have the right format.
+const addressFormat = new RegExp(/0x[\d\w]+/);
+if (!addressFormat.test(program.contract)) {
+    console.log('Contract address is not in the correct format. Please use "0x..." as a format.');
+    process.exit();
+}
+
 const web3 = new Web3(program.source);
 
 const node = program.parity ? 'parity' : 'geth';
 
 contractFunc.getContract(
-    program.contract,
+    web3.utils.toChecksumAddress(program.contract),
     web3, {
         deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
         csv_path: program.file ? program.file : undefined,

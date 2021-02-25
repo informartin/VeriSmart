@@ -188,6 +188,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         }
     }
     await setValuesOnInitContract(target_address, initInstance, keys, values);
+
     // selfdestruct initContract
     await initInstance.methods.close().send({
         from: target_address,
@@ -209,7 +210,6 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
             console.log('Error while trying to destruct initContract: ', error);
         });
     return proxyAddress;
-
 };
 
 const setValuesOnInitContract = async (target_address, initContract, keys, values) => {
