@@ -20,6 +20,7 @@
     "async": "^3.2.0",
     "async-promise-queue": "^1.0.5",
     "commander": "^6.2.1",
+    "evm": "^0.2.0",
     "fast-csv": "^4.3.6",
     "js-sha3": "^0.8.0",
     "keccak": "^3.0.1",

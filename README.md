@@ -12,8 +12,7 @@ A detailed description can be found in the corresponding research paper: [Verifi
 * Prerequisites:
   * Full blockchain nodes in archive mode
   * Access to underlying database for merkle-tree verifications (Currently leveldb is supported)
-  * An unlocked account for deploying contracts and sending transactions on the target blockchain (Depending on the target chain, sufficient cryptocurrency may be requried)
-  * [Mythril](https://github.com/ConsenSys/mythril-classic) needs to be installed for observing contract dependencies
+  * An unlocked account for deploying contracts and sending transactions on the target blockchain (Depending on the target chain, sufficient cryptocurrency may be required)
 
 * Install dependencies using npm: `npm install -g`
   * The global flag is only required if CLI is to be used globally

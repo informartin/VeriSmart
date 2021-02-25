@@ -5,11 +5,13 @@ const exec = require('child_process').execSync;
 const fs = require("fs");
 const rlp = require('rlp');
 const keccak = require('keccak');
+const { EVM } = require('evm');
 
 const portContract = (contract_address,
                       source_rpc,
                       target_rpc,
                       target_address,
+                      code_size,
                       {deployment_tx_hash,
                       csv_path,
                       node,
@@ -41,7 +43,14 @@ const portContract = (contract_address,
                     // Contracts return entire code, i.e. > 3
                     if (code.length > 3) {
                         console.log('--- Reference found in state, migrating: ', value, ' ---');
-                        const address = await portContract("0x" + value, source_rpc, target_rpc, target_address);
+                        const address = await portContract(Web3.utils.toChecksumAddress(value), source_rpc, target_rpc, target_address, code_size, 
+                            {
+                                deployment_tx_hash,
+                                csv_path,
+                                node,
+                                fat_db,
+                                targetFile
+                        });
                         const contractAddress = address.substring(2);
                         console.log('contract address: ,', contractAddress);
                         const paddingValue = "000000000000000000000000";
@@ -55,51 +64,38 @@ const portContract = (contract_address,
             }
         }
 
-        // remove http://
-        const mythril_rpc = source_rpc.replace(/(^\w+:|^)\/\//, '');
+        // getting all static references
+        const evm = new EVM(contract_code);
+        let referencedContracts = await evm.getOpcodes()
+            .filter( code => (code.name === 'PUSH20') )
+            .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
+            .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
+        // filter out all EOAs
+        referencedContracts = await referencedContracts.filter(async (address) => {
+            const referenced_address_code = await web3.eth.getCode(address);
+            return referenced_address_code.length > 3
+        });
 
-        // call mythrill to receive referenced contracts
-        // log is written to stderr, forward to stdout and pipe to grep
-        // use grep's perl regex as ES2017 doesn't support lookbehind regexes
-        const command =
-            'myth --rpc ' +
-            mythril_rpc +
-            ' -xa ' +
-            contract_address +
-            ' -l --max-depth 8 -v1 2>&1 >/dev/null | ' +
-            'grep -oP \'(?<=INFO:root:Dependency address: ).*$\'';
-        console.log('command: ', command);
-        let execution_result = '';
-        try {
-            let stdout = exec(command);
-            execution_result = stdout.toString('utf8');
-            console.log('STD: ', execution_result);
-        } catch (ex) {
-            console.log('No dependency found');
-        }
-        let referencedContracts = Array.from(new Set(execution_result.split(/\r\n|\r|\n/g)));
-        referencedContracts.pop();
-
-        console.log('Referenced contracts: ', referencedContracts);
         for (const contract of referencedContracts) {
-            // Currently, state dependencies are obeserved as well
-            // However, they should not be taken care of here
-            const value = contract.substring(2).replace(/^0+/, '');
-            console.log('Value: ',value);
-            if (!(value in referenced_contract_addresses)) {
-                console.log('--- Reference found in bytecode, migrating: ', contract, ' ---');
-                const receipt = await portContract(contract, source_rpc, target_rpc, target_address);
-                const contractAddress = (receipt._address + "").substring(2);
-                console.log('Replacing ', contract.substring(2), ' with ', contractAddress);
-                const regex = new RegExp(contract.substring(2));
-                contract_code.replace(regex, contractAddress);
-            }
+            console.log('--- Reference found in bytecode, migrating: ', contract, ' ---');
+            const contractAddress = await portContract(contract, source_rpc, target_rpc, target_address, code_size, 
+                {
+                    deployment_tx_hash,
+                    csv_path,
+                    node,
+                    fat_db,
+                    targetFile
+            });
+            console.log(`Replacing ${contract.substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
+            const regex = new RegExp(contract.substring(2).toLowerCase());
+            contract_code = contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
         }
+
         // TODO: Clean up this mess
-        let deploy_code = "0x" + createB.createBytecode(contract_code, storage);
+        let deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
         // TODO: Should calculate proper gas requirement for executing code
         console.log('Length', deploy_code.length);
-        if (deploy_code.length < 1000) {
+        if (deploy_code.length < code_size) {
             return await deployLogic(web3, target_address, deploy_code);
         } else {
             return await deployLargeContract(web3, target_address, contract_code, storage);
@@ -192,6 +188,26 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         }
     }
     await setValuesOnInitContract(target_address, initInstance, keys, values);
+    // selfdestruct initContract
+    await initInstance.methods.close().send({
+        from: target_address,
+        gas: 4700000,
+        gasPrice: '2000000000'
+    })
+        .on('error', function (error) {
+            console.log('Error while trying to destruct initContract: ', error)
+        })
+        .on('transactionHash', function (transactionHash) {
+            console.log('TxHash: ', transactionHash)
+        })
+        .on('receipt', function (receipt) {
+            console.log('InitContract got selfdestructed.');
+            console.log('Receipt: ', receipt);
+            return receipt;
+        })
+        .catch((error) => {
+            console.log('Error while trying to destruct initContract: ', error);
+        });
     return proxyAddress;
 
 };
