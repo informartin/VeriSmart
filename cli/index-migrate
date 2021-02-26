@@ -12,6 +12,7 @@ program
     .option('-t, --target <required>', 'Target RPC')
     .option('-a, --address <required>', 'Address to use on target blockchain (unlocked)')
     .option('-s, --code_size [optional]', 'Max code size of contract in one transaction')
+    .option('-f, --state_file [optional]', 'JSON file with key/value mapping of the state of the source contract')
     .parse(process.argv);
 
 const node = program.parity ? 'parity' : 'geth';
@@ -34,6 +35,7 @@ redeployFunc.portContract(
         csv_path: program.file ? program.file : undefined,
         node: node,
         fat_db: program.fatDb ? program.fatDb : false,
+        stateFile: program.state_file ? program.state_file : undefined,
         targetFile: program.output ? program.output : undefined
     }
 ).then(() => {
