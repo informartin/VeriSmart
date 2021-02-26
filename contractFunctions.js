@@ -34,7 +34,7 @@ const getContractValues = async (contract) => {
     for (let [index, paddedValue] of Object.entries(storage)) {
         // remove leading zeros
         const value = paddedValue.replace(/^0+/, '');
-        if (!web3_source_rpc.utils.isAddress(value) || await web3.eth.getCode(value) < 3) {
+        if (!web3_source_rpc.utils.isAddress(value) || (await web3.eth.getCode(value)).length < 4) {
             values[index] = paddedValue;
         }
     }
