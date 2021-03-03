@@ -34,11 +34,15 @@ contract('testGetState', (accounts) => {
 
         // need to dynamically change addresses in the correct state json file
         validJson["contract_address"] = simpleStorageInstance.address;
+        validJson["raw_contract_code"] = await web3.eth.getCode(simpleStorageInstance.address);
+        contractWithLibByteCode = await web3.eth.getCode(contractWithLibInstance.address);
+        convertLibByteCode = await web3.eth.getCode(ConvertLib.address);
         validJson["state_references"][0] = validJson["state_references"][0].replace(/0x[2]{40}/, contractWithLibInstance.address);
         validJson["state_references"][0] = validJson["state_references"][0].replace(/73[3]{40}/g, `73${libInstance.address.toLowerCase().substring(2)}`);
         validJson["state_references"][0] = validJson["state_references"][0].replace(/73[3]{40}/g, `73${libInstance.address.toLowerCase().substring(2)}`);
         validJson["state_references"][0] = validJson["state_references"][0].replace(/0x12345678910/, libInstance.address);
-
+        validJson["state_references"][0] = validJson["state_references"][0].replace(/contractWithLib/, contractWithLibByteCode);
+        validJson["state_references"][0] = validJson["state_references"][0].replace(/convertLib/, convertLibByteCode);
 
         execSync(`rm ../${jsonFileName}`);
 
