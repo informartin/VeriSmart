@@ -5,77 +5,75 @@ const fs = require("fs");
 
 const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile}) => {
 
-  console.log('Retrieving contract code for: ', contract_address);
-  let contract_code = '';
+    console.log('Retrieving contract code for: ', contract_address);
 
-  if(node==="parity" && fat_db===true) {
-      /**
-       * Retrieval via parity fat_db && eth_getStorageAt
-       */
-        return web3.eth.getCode(contract_address)
-            .then(async (raw_contract_code) => {
-                contract_code = raw_contract_code.substring(2);
-                let storage = await getStorageFromParityFatDB(contract_address, web3);
-                return {contract_code: contract_code, storage: storage};
-        })
-  }
-  else {
-      /**
-       * Standard retrieval
-       */
-      return web3.eth.getCode(contract_address).then((raw_contract_code) => {
-        contract_code = raw_contract_code.substring(2);
-        if(typeof csv_path !== 'undefined')
-            return transactionsFunc.getTransactionsFromCSV(csv_path);
-        if(typeof deployment_tx_hash === 'undefined')
-            return transactionsFunc.getTransactions(contract_address, web3);
+    let contractCode = await web3.eth.getCode(contract_address);
+    let storage;
+
+    fat_db = typeof fat_db === 'string' && !isNaN(parseInt(fat_db)) ? parseInt(fat_db) : fat_db === true ? fat_db : false;
+
+    if (node==="parity" && ((typeof fat_db === 'number') || fat_db === true)) {
+        /**
+         * Retrieval via parity fat_db && eth_getStorageAt
+         */
+        contract_code = contractCode.substring(2);
+        storage = await getStorageFromParityFatDB(contract_address, web3, typeof fat_db === 'number' ? fat_db : 100);
+    } else {
+        /**
+         * Standard retrieval
+         */
+        
+        contract_code = contractCode.substring(2);
+        let transactions;
+        if (typeof csv_path !== 'undefined')
+            transactions = await transactionsFunc.getTransactionsFromCSV(csv_path);
+        if (typeof deployment_tx_hash === 'undefined')
+            transactions = await transactionsFunc.getTransactions(contract_address, web3);
         else
-            return transactionsFunc.getTransactionsLight(contract_address, web3, deployment_tx_hash);
-      }).then(async transactions => {
-          console.log('Transactions Received: ', transactions);
-          const rpc = web3.currentProvider.host;
-          //let storage = await replayCsv.getState(rpc, node, contract_address, csv_path);
-          //let storage = await replayCsv.replayTransaction(transactions, rpc, node);
-          let storage = await replayCsv.getState(transactions, node, rpc, contract_address);
-          if(typeof targetFile !== 'undefined')
-              writeToJson(storage, targetFile);
-        return {contract_code: contract_code, storage: storage};
-      });
-  }
+            transactions = await transactionsFunc.getTransactionsLight(contract_address, web3, deployment_tx_hash);
+        
+        console.log('Transactions Received: ', transactions);
+        const rpc = web3.currentProvider.host;
+        //let storage = await replayCsv.getState(rpc, node, contract_address, csv_path);
+        //let storage = await replayCsv.replayTransaction(transactions, rpc, node);
+        storage = await replayCsv.getState(transactions, node, rpc, contract_address);
+            
+    }
 
+    if (typeof targetFile !== 'undefined') writeToJson(storage, targetFile);
+    
+    return { contract_code: contract_code, storage: storage };
 };
 
-const getStorageFromParityFatDB = async (contract_address, web3) => {
+const getStorageFromParityFatDB = async (contract_address, web3, result_limit) => {
     /**
      * TODO Permit passing value via CLI
      */
-    let resultlength = 100;
-    let limit = resultlength;
+    let limit = result_limit;
 
-    console.log("Retrieving state from Parity fat-db")
+    console.log(`Retrieving state from Parity fat-db with limit ${result_limit}`);
 
     let storage = {};
     let offset = null;
-    while (resultlength === limit) {
+    while (result_limit === limit) {
 
-        await request.post({
+        const body = await request.post({
             url: web3.currentProvider.host,
             method: "POST",
             json: true,
             body: {"jsonrpc":"2.0", "method":"parity_listStorageKeys","params": [contract_address, limit, offset], "id":1}
-        }).then(async (body) => {
-                resultlength = body.result.length;
-                console.log("Processing ", resultlength, " keys")
-                offset = body.result[body.result.length-1];
-                for(let i = 0; i < body.result.length; i++){
-                    let key = body.result[i];
-                    let value = await web3.eth.getStorageAt(contract_address, key);
-                    storage[key.substring(2)] = value.substring(2)
-                }
-
-        })
+        });
+        
+        result_limit = body.result.length;
+        console.log("Processing ", result_limit, " keys")
+        offset = body.result[body.result.length-1];
+        for (let i = 0; i < body.result.length; i++) {
+            let key = body.result[i];
+            let value = await web3.eth.getStorageAt(contract_address, key);
+            storage[key.substring(2)] = value.substring(2)
+        }
     }
-    return storage
+    return storage;
 };
 
 
@@ -106,12 +104,13 @@ const replayTransactions = async (transactions, rpc) => {
 };
 
 const writeToJson = (storage, targetFile) => {
-        fs.writeFile(targetFile, JSON.stringify(storage), (err) => {
-            if (err) {
-                console.error(err);
-                return;
-            }
-        });
+    const state = JSON.stringify(storage, null, 4);
+    fs.writeFileSync(targetFile, state, (err) => {
+        if (err) {
+            console.error(err);
+            return;
+        }
+    });
 };
 
 module.exports.getContract = getContract;
