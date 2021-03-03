@@ -1,0 +1,11 @@
+{
+    "contract_address": "0x1",
+    "raw_contract_code": "simpleSmartContractStorage",
+    "state": {
+        "0000000000000000000000000000000000000000000000000000000000000000": "000000000000000000000000009a77b77c1bd10f6bd6ce0c76b6a06c1df5e8ae"
+    },
+    "static_references": [],
+    "state_references": [
+        "{\n    \"contract_address\": \"0x2222222222222222222222222222222222222222\",\n    \"raw_contract_code\": \"contractWithLib\",\n    \"state\": {\n        \"c02b974894de5bf0fb7566ce8f7b1adad2756368026c4d4ee0415f5e0642cc68\": \"0000000000000000000000000000000000000000000000000000000000002710\"\n    },\n    \"static_references\": [\n        \"{\\n    \\\"contract_address\\\": \\\"0x12345678910\\\",\\n    \\\"raw_contract_code\\\": \\\"convertLib\\\",\\n    \\\"state\\\": {},\\n    \\\"static_references\\\": [],\\n    \\\"state_references\\\": []\\n}\"\n    ],\n    \"state_references\": []\n}"
+    ]
+}
