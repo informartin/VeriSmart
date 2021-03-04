@@ -4,6 +4,8 @@ const program = require('commander');
 const sharedAttributes = require('./index-shared-attributes');
 const redeployFunc = require('../redeployContract');
 const Web3 = require('web3');
+const contractHelper = require('../contractHelper.js');
+const fs = require('fs');
 
 sharedAttributes(program);
 
@@ -19,9 +21,22 @@ const node = program.parity ? 'parity' : 'geth';
 
 // check if addresses have the right format.
 const addressFormat = new RegExp(/0x[\d\w]+/);
-if (!addressFormat.test(program.contract) || !addressFormat.test(program.address)) {
+if ((!addressFormat.test(program.contract) && program.state_file === undefined) || !addressFormat.test(program.address)) {
     console.log('Addresses are not in the correct format. Please use "0x..." as a format.');
     process.exit();
+}
+
+let stateJson = undefined;
+if (program.state_file !== undefined) {
+    let stateFileString;
+    try {
+        stateFileString = fs.readFileSync(program.state_file, { encoding: 'utf-8'});
+    } catch (e) {
+        console.log(`Given stateFile (${program.state_file}) is not valid.`);
+        console.log(e);
+        process.exit(9);
+    }
+    stateJson = contractHelper.extractContractFromJSON(stateFileString);
 }
 
 redeployFunc.portContract(
@@ -35,7 +50,7 @@ redeployFunc.portContract(
         csv_path: program.file ? program.file : undefined,
         node: node,
         fat_db: program.fatDb ? program.fatDb : false,
-        stateFile: program.state_file ? program.state_file : undefined,
+        stateJson,
         targetFile: program.output ? program.output : undefined
     }
 ).then(() => {

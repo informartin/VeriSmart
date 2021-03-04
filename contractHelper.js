@@ -96,6 +96,35 @@ const getState = async (contract_address,
     return contractState;
 };
 
+const extractContractFromJSON = (stateString) => {
+    let contractState;
+    try {
+        contractState = JSON.parse(stateString);
+        if (!contractState || typeof contractState !== "object") throw new Error();
+
+        // converting the stateReferences into json objects
+        const stateReferencesObjects = [];
+        for (const stateReference of contractState['state_references']) {
+            stateReferencesObjects.push(extractContractFromJSON(stateReference));
+        }
+        contractState['state_references'] = stateReferencesObjects;
+
+        // converting static references into json objects
+        const staticReferencesObjects = [];
+        for (const staticReferences of contractState['static_references']) {
+            staticReferencesObjects.push(extractContractFromJSON(staticReferences));
+        }
+        contractState['state_references'] = staticReferencesObjects;
+    } catch (e) {
+        console.log(`ERROR: Given string ${stateString} is not valid json structure`);
+        console.log('ERROR:');
+        console.log(e);
+        process.exit(9);
+    }
+
+    return contractState;
+}
+
 const writeToJson = (storage, targetFile) => {
     const state = JSON.stringify(storage, null, 4);
     fs.writeFileSync(targetFile, state, (err) => {
@@ -107,3 +136,4 @@ const writeToJson = (storage, targetFile) => {
 };
 
 module.exports.getState = getState;
+module.exports.extractContractFromJSON = extractContractFromJSON;

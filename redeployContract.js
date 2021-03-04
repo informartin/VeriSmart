@@ -15,22 +15,17 @@ const portContract = async (contract_address,
                       csv_path,
                       node,
                       fat_db,
-                      stateFile,
+                      stateJson,
                       targetFile}) => {
 
     const source_web3 = new Web3(source_rpc);
     const target_web3 = new Web3(target_rpc);
 
-    let source_contract;
-    if (stateFile !== undefined) {
-        source_contract = await extractContractFromJSON(stateFile, source_web3, contract_address);
-    } else {
-        source_contract = await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile});
-    }
+    let source_contract = stateJson !== undefined ? stateJson : await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile});
 
     // Mapping of referenced contract addresses on old and new rpc
-    let storage = source_contract.storage;
-    let contract_code = source_contract.contract_code;
+    let storage = source_contract['state'] ? source_contract['state'] : source_contract.storage;
+    let contract_code = source_contract['raw_contract_code'] ? source_contract['raw_contract_code'].substring(2) : source_contract.contract_code;
     let referenced_contract_addresses = {};
     //check if storage variable is a contract
     for (const [index, paddedValue] of Object.entries(storage)) {
@@ -41,7 +36,7 @@ const portContract = async (contract_address,
             // check if if it has been processed before
             if (value in referenced_contract_addresses) {
                 storage[index] = referenced_contract_addresses[value];
-            } else {
+            } else if (stateJson === undefined) {
                 const code = await source_web3.eth.getCode(value);
                 console.log('Code: ', code);
                 console.log('Length: ', code.length);
@@ -55,6 +50,7 @@ const portContract = async (contract_address,
                             csv_path,
                             node,
                             fat_db,
+                            stateJson,
                             targetFile
                     });
                     const contractAddress = address.substring(2);
@@ -70,30 +66,64 @@ const portContract = async (contract_address,
         }
     }
 
+    // push state references from stat
+    if (stateJson !== undefined) {
+        for (const stateReference of source_contract['state_references']) {
+            console.log('--- Reference found in state, migrating: ', value, ' ---');
+            const address = await portContract(Web3.utils.toChecksumAddress(stateReference['contract_address']), source_rpc, target_rpc, target_address, code_size, 
+                {
+                    deployment_tx_hash,
+                    csv_path,
+                    node,
+                    fat_db,
+                    targetFile,
+                    stateJson: stateReference
+            });
+            const contractAddress = address.substring(2);
+            console.log('contract address: ,', contractAddress);
+            const paddingValue = "000000000000000000000000";
+            const paddedAddress = paddingValue + contractAddress;
+            console.log('padded address: ,', paddedAddress);
+            referenced_contract_addresses[value] = paddedAddress;
+
+            storage[index] = paddedAddress;
+        }
+    }
+
     // getting all static references
-    const evm = new EVM(contract_code);
-    let referencedContracts = await evm.getOpcodes()
-        .filter( code => (code.name === 'PUSH20') )
-        .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
-        .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
-    // filter out all EOAs
-    referencedContracts = await referencedContracts.filter(async (address) => {
-        const referenced_address_code = await source_web3.eth.getCode(address);
-        return referenced_address_code.length > 3
-    });
+    let referencedContracts
+    if (stateJson === undefined) {
+        const evm = new EVM(contract_code);
+        referencedContracts = await evm.getOpcodes()
+            .filter( code => (code.name === 'PUSH20') )
+            .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
+            .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
+        // filter out all EOAs
+        for (const contract of referencedContracts) {
+            const referenced_address_code = await source_web3.eth.getCode(contract);
+            if (referenced_address_code.length < 4) {
+                referencedContracts.splice(referencedContracts.indexOf(contract), 1);
+            }
+        }
+        referencedContracts = referencedContracts.map(contract => { return { contract_address: contract }; });
+    } else {
+        referencedContracts = stateJson['static_references'];
+    }
+    
 
     for (const contract of referencedContracts) {
         console.log('--- Reference found in bytecode, migrating: ', contract, ' ---');
-        const contractAddress = await portContract(contract, source_rpc, target_rpc, target_address, code_size, 
+        const contractAddress = await portContract(contract['contract_address'], source_rpc, target_rpc, target_address, code_size, 
             {
                 deployment_tx_hash,
                 csv_path,
                 node,
                 fat_db,
+                stateJson: contract['raw_contract_code'] ? contract : undefined,
                 targetFile
         });
-        console.log(`Replacing ${contract.substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
-        const regex = new RegExp(contract.substring(2).toLowerCase());
+        console.log(`Replacing ${contract['contract_address'].substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
+        const regex = new RegExp(contract['contract_address'].substring(2).toLowerCase());
         contract_code = contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
     }
 
@@ -269,20 +299,5 @@ const calculateContractAddress = (nonce, target_address) => {
     console.log("Calculated Contract address: " + contract_address);
     return contract_address;
 };
-
-const extractContractFromJSON = async (stateFile, web3, contractAddress) => {
-    const source_contract = {};
-    try {
-        source_contract['storage'] = JSON.parse(fs.readFileSync(stateFile, { encoding: 'utf-8'}));
-        if (!source_contract['storage'] || typeof source_contract['storage'] !== "object") throw new Error();
-    }
-    catch (e) {
-        console.log('Given stateFile is not valid.');
-        process.exit(9);
-    }
-    source_contract['contract_code'] = (await web3.eth.getCode(contractAddress)).substring(2);
-
-    return source_contract;
-}
 
 module.exports.portContract = portContract;
