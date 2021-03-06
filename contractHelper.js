@@ -35,19 +35,29 @@ const getState = async (contract_address,
         const value = paddedValue.replace(/^0+/, '');
         if (source_web3.utils.isAddress(value)) {
             console.log('Address found in Storage: ', value);
-            const referencedContract = await getState(
-                Web3.utils.toChecksumAddress(value),
-                source_web3,
-                {
-                    deployment_tx_hash,
-                    csv_path,
-                    node,
-                    fat_db,
-                    targetFile: undefined
+            const checksumAddress = Web3.utils.toChecksumAddress(value);
+            const indexOfExistingReference = stateReferencedContracts.findIndex((referencedContract) => referencedContract.contract_address === checksumAddress);
+            if (indexOfExistingReference < 0) {
+                const referencedContract = await getState(
+                    checksumAddress,
+                    source_web3,
+                    {
+                        deployment_tx_hash,
+                        csv_path,
+                        node,
+                        fat_db,
+                        targetFile: undefined
+                    }
+                );
+                if (referencedContract !== undefined) {
+                    console.log('--- Reference found in state: ', value, ' ---');
+                    delete storage[index];
+                    referencedContract['index'] = index;
+                    stateReferencedContracts.push(referencedContract);
                 }
-            );
-            if (referencedContract !== undefined) {
-                console.log('--- Reference found in state: ', value, ' ---');
+            } else {
+                const referencedContract = Object.assign({}, stateReferencedContracts[indexOfExistingReference]);
+                referencedContract['index'] = index;
                 delete storage[index];
                 stateReferencedContracts.push(referencedContract);
             }
