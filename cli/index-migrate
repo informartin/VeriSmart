@@ -26,33 +26,23 @@ if ((!addressFormat.test(program.contract) && program.state_file === undefined) 
     process.exit();
 }
 
-let stateJson = undefined;
-if (program.state_file !== undefined) {
-    let stateFileString;
-    try {
-        stateFileString = fs.readFileSync(program.state_file, { encoding: 'utf-8'});
-    } catch (e) {
-        console.log(`Given stateFile (${program.state_file}) is not valid.`);
-        console.log(e);
-        process.exit(9);
-    }
-    stateJson = contractHelper.extractContractFromJSON(stateFileString);
-}
-
-redeployFunc.portContract(
-    Web3.utils.toChecksumAddress(program.contract),
-    program.source,
-    program.target,
-    Web3.utils.toChecksumAddress(program.address),
-    program.code_size ? program.code_size : 1000,
-    {
-        deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
-        csv_path: program.file ? program.file : undefined,
-        node: node,
-        fat_db: program.fatDb ? program.fatDb : false,
-        stateJson,
-        targetFile: program.output ? program.output : undefined
-    }
-).then(() => {
-    process.exit();
-});
+contractHelper.extractContractFromJSONFile(program.state_file)
+    .then((stateJson) => {
+        return redeployFunc.portContract(
+            Web3.utils.toChecksumAddress(program.contract),
+            program.source,
+            program.target,
+            Web3.utils.toChecksumAddress(program.address),
+            program.code_size ? program.code_size : 1000,
+            {
+                deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
+                csv_path: program.file ? program.file : undefined,
+                node: node,
+                fat_db: program.fatDb ? program.fatDb : false,
+                stateJson,
+                targetFile: program.output ? program.output : undefined
+            }
+        );
+    }).then(() => {
+        process.exit();
+    });

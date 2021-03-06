@@ -51,7 +51,7 @@ const portContract = async (contract_address,
                             node,
                             fat_db,
                             stateJson,
-                            targetFile
+                            targetFile: undefined
                     });
                     const contractAddress = address.substring(2);
                     console.log('contract address: ,', contractAddress);
@@ -69,29 +69,34 @@ const portContract = async (contract_address,
     // push state references from stat
     if (stateJson !== undefined) {
         for (const stateReference of source_contract['state_references']) {
-            console.log('--- Reference found in state, migrating: ', value, ' ---');
-            const address = await portContract(Web3.utils.toChecksumAddress(stateReference['contract_address']), source_rpc, target_rpc, target_address, code_size, 
-                {
-                    deployment_tx_hash,
-                    csv_path,
-                    node,
-                    fat_db,
-                    targetFile,
-                    stateJson: stateReference
-            });
-            const contractAddress = address.substring(2);
-            console.log('contract address: ,', contractAddress);
-            const paddingValue = "000000000000000000000000";
-            const paddedAddress = paddingValue + contractAddress;
-            console.log('padded address: ,', paddedAddress);
-            referenced_contract_addresses[value] = paddedAddress;
-
-            storage[index] = paddedAddress;
+            if (stateReference['contract_address'] in referenced_contract_addresses) {
+                console.log('--- Duplicate reference found in state: ', stateReference['contract_address'], ' ---');
+                storage[stateReference['index']] = referenced_contract_addresses[stateReference['contract_address']];
+            } else {
+                console.log('--- Reference found in state, migrating: ', stateReference['contract_address'], ' ---');
+                const address = await portContract(Web3.utils.toChecksumAddress(stateReference['contract_address']), source_rpc, target_rpc, target_address, code_size, 
+                    {
+                        deployment_tx_hash,
+                        csv_path,
+                        node,
+                        fat_db,
+                        targetFile: undefined,
+                        stateJson: stateReference
+                });
+                const contractAddress = address.substring(2);
+                console.log('contract address: ,', contractAddress);
+                const paddingValue = "000000000000000000000000";
+                const paddedAddress = paddingValue + contractAddress;
+                console.log('padded address: ,', paddedAddress);
+                referenced_contract_addresses[stateReference['contract_address']] = paddedAddress;
+    
+                storage[stateReference['index']] = paddedAddress;
+            }
         }
     }
 
     // getting all static references
-    let referencedContracts
+    let referencedContracts;
     if (stateJson === undefined) {
         const evm = new EVM(contract_code);
         referencedContracts = await evm.getOpcodes()
@@ -112,15 +117,15 @@ const portContract = async (contract_address,
     
 
     for (const contract of referencedContracts) {
-        console.log('--- Reference found in bytecode, migrating: ', contract, ' ---');
+        console.log('--- Reference found in bytecode, migrating: ', contract['contract_address'], ' ---');
         const contractAddress = await portContract(contract['contract_address'], source_rpc, target_rpc, target_address, code_size, 
             {
                 deployment_tx_hash,
                 csv_path,
                 node,
                 fat_db,
-                stateJson: contract['raw_contract_code'] ? contract : undefined,
-                targetFile
+                stateJson: stateJson ? contract : undefined,
+                targetFile: undefined
         });
         console.log(`Replacing ${contract['contract_address'].substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
         const regex = new RegExp(contract['contract_address'].substring(2).toLowerCase());

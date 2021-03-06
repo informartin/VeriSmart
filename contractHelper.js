@@ -2,6 +2,7 @@ const Web3 = require('web3');
 const { EVM } = require('evm');
 const contractFunc = require('./getContract.js');
 const fs = require("fs");
+const json = require('big-json');
 
 const getState = async (contract_address,
                         source_web3,
@@ -63,7 +64,7 @@ const getState = async (contract_address,
         }
     }
     // get state of referenced contracts
-    static_references = [];
+    const static_references = [];
     for (const address of staticReferencedContracts) {
         console.log('--- Reference found in static code: ', address, ' ---');
         const reference = await getState(
@@ -96,33 +97,23 @@ const getState = async (contract_address,
     return contractState;
 };
 
-const extractContractFromJSON = (stateString) => {
-    let contractState;
-    try {
-        contractState = JSON.parse(stateString);
-        if (!contractState || typeof contractState !== "object") throw new Error();
+const extractContractFromJSONFile = async (jsonFileName) => {
+    console.log('Extracting data from json file...');
+    if (jsonFileName === undefined) return undefined;
+    const readStream = fs.createReadStream(jsonFileName);
+    const parseStream = json.createParseStream();
 
-        // converting the stateReferences into json objects
-        const stateReferencesObjects = [];
-        for (const stateReference of contractState['state_references']) {
-            stateReferencesObjects.push(extractContractFromJSON(stateReference));
-        }
-        contractState['state_references'] = stateReferencesObjects;
-
-        // converting static references into json objects
-        const staticReferencesObjects = [];
-        for (const staticReferences of contractState['static_references']) {
-            staticReferencesObjects.push(extractContractFromJSON(staticReferences));
-        }
-        contractState['state_references'] = staticReferencesObjects;
-    } catch (e) {
-        console.log(`ERROR: Given string ${stateString} is not valid json structure`);
-        console.log('ERROR:');
-        console.log(e);
-        process.exit(9);
-    }
-
-    return contractState;
+    let bigJson;
+    return await new Promise((resolve) => {
+        parseStream.on('data', function(jsonData) {
+            bigJson = jsonData;
+        });
+        parseStream.on('end', () => {
+            console.log('Extraction done!');
+            resolve(bigJson);
+        });
+        readStream.pipe(parseStream);
+    });
 }
 
 const writeToJson = (storage, targetFile) => {
@@ -136,4 +127,4 @@ const writeToJson = (storage, targetFile) => {
 };
 
 module.exports.getState = getState;
-module.exports.extractContractFromJSON = extractContractFromJSON;
+module.exports.extractContractFromJSONFile = extractContractFromJSONFile;

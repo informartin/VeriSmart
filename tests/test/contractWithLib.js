@@ -20,7 +20,7 @@ contract('ContractWithLib', (accounts) => {
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());
 
-        const matcher = output.toString().match(/[\w\W]Proxy Contract:  (0x[\w\d]{40})/);
+        const matcher = output.toString().match(/[\w\W]+Proxy Contract:  (0x[\w\d]{40})/);
         expect(matcher).not.equal(null);
         const proxyAddress = matcher[1];
 
@@ -36,7 +36,7 @@ contract('ContractWithLib', (accounts) => {
         output = execSync(verifyCommand, { cwd: './../' });
         console.log(output.toString());
 
-        result = output.toString().match(/[\w\W]The states of the smart contracts are equal/);
+        result = output.toString().match(/[\w\W]+The states of the smart contracts are equal/);
 
         expect(result).not.equal(null);
     });

@@ -5,30 +5,45 @@ const ConvertLib = artifacts.require('ConvertLib');
 const fs = require('fs');
 
 const source_dsl = 'http://localhost:8545';
-const jsonFileName = 'tests/test/data/testMigrateFromStateFile.json';
+const jsonFileName = 'test/data/testMigrateFromStateFile.json';
 
 contract('testMigrateFromState', (accounts) => {
     it('should migrate all values/references in state and code to other blockchain', async () => {
-        // TODO STILL NEED TO CREATE AN APPROPRIATE TEST
-        // TODO MIGRATE STILL DOESN'T WORK
-        const simpleStorageInstance = await SimpleSmartContractStorage.deployed();
-        const contractWithLibInstance = await ContractWithLib.deployed();
-        const libInstance = await ConvertLib.deployed();
-
-        // saving smart contract lib in state of source contract
-        await simpleStorageInstance.setContract.sendTransaction(contractWithLibInstance.address);
-
-        const savedContract = await simpleStorageInstance.getContract.call();
-
-        expect(savedContract).to.equal(contractWithLibInstance.address);
-
-        let migrateCommand = `./cli/index migrate --state_file ${jsonFileName} --target ${source_dsl} --address ${accounts[0]} --parity`;
+        let migrateCommand = `./cli/index migrate --state_file tests/${jsonFileName} --target ${source_dsl} --address ${accounts[0]} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());
 
-        // TODO output checken!
+        // get new address of referenced contract (ContractWithLib)
+        let matcher = output.toString().match(/[\w\W]+Proxy Contract:  (0x[\d\w]{40})/);
+        expect(matcher).not.equal(null);
+        const stateReferencedContract = matcher[1];
+        
+        // get new address of SimpleSmartContractStorage
+        matcher = output.toString().match(/[\w\W]+Proxy Contract:[\w\W]+Logic Contract:  (0x[\d\w]{40})/);
+        expect(matcher).not.equal(null);
+        const simpleSmartContractStorageAddress = matcher[1];
+
+        // check if SimpleSmartContractStorage references correct contract
+        const simpleSmartContractStorageInstance = new web3.eth.Contract(SimpleSmartContractStorage.abi, simpleSmartContractStorageAddress);
+        const referencedContract = await simpleSmartContractStorageInstance.methods.getContract().call();
+
+        expect(referencedContract).to.equal(stateReferencedContract);
+        
+        // check if deployed contractCode is the same as in the jsonStateFile
+        const jsonState = JSON.parse(fs.readFileSync(jsonFileName));
+        const contractCode = await web3.eth.getCode(simpleSmartContractStorageAddress);
+
+        expect(contractCode).to.equal(jsonState['raw_contract_code']);
+
+        // check if same value is in migrated ContractWithLib
+        const contractWithLibInstance = new web3.eth.Contract(ContractWithLib.abi, stateReferencedContract);
+        const value = parseInt(await contractWithLibInstance.methods.getBalance(accounts[0]).call());
+
+        const expectedValue = parseInt(`0x${jsonState['state_references'][0]['state'][Object.keys(jsonState['state_references'][0]['state'])[0]]}`, 'hex');
+
+        expect(value).to.equal(expectedValue);
     });
 });
