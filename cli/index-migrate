@@ -35,6 +35,7 @@ redeployFunc.portContract(
         node: node,
         fat_db: program.fatDb ? program.fatDb : false,
         max_depth: program.recursion ? program.recursion : -1,
+        block_number: program.block_number ? program.block_number : 'latest',
         targetFile: program.output ? program.output : undefined
     }
 ).then(() => {

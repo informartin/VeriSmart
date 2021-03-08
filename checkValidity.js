@@ -19,7 +19,7 @@ const isStateEqual = async (
     const web3_target_rpc = new Web3(target_rpc);
 
     // get the block were the contracts were deployed
-    let true_source_block = source_block !== undefined ? source_block : await findDeploymentBlock(source_contract_address, web3_source_rpc);
+    let true_source_block = source_block !== undefined ? source_block : await web3_source_rpc.eth.getBlockNumber();
     
     let true_target_block;
     if (target_block === undefined) {
@@ -32,7 +32,7 @@ const isStateEqual = async (
     let logic_contract_address = await getLogicContractAddress(target_contract_address, web3_target_rpc);
     if (logic_contract_address === undefined) logic_contract_address = target_contract_address;
 
-    if (true_source_block === -1 || (await web3_source_rpc.eth.getCode(source_contract_address, true_source_block)).length < 4) {
+    if ((await web3_source_rpc.eth.getCode(source_contract_address, true_source_block)).length < 4) {
         console.log('Source contract is not deployed at the provided block or is generally not on the blockchain..');
         process.exit(9);
     }
@@ -40,7 +40,7 @@ const isStateEqual = async (
         console.log('Target contract is not deployed at the provided block or is generally not on the blockchain.');
         process.exit(9);
     }
-    console.log(`Source contract deployed at block no ${true_source_block}`);
+
     console.log(`Target contract (fully) deployed at block no ${true_target_block}`);
 
     // check for equality of contracts without references to other contracts
@@ -102,8 +102,8 @@ const isStateOfReferencingContractsEqual= async (
     const web3_target_rpc = new Web3(target_rpc);
 
     // getting source contract
-    const source_contract = await contractFunc.getContract(source_contract_address, web3_source_rpc, { node, fat_db });
-    const target_contract = await contractFunc.getContract(target_contract_address, web3_target_rpc, { node, fat_db });
+    const source_contract = await contractFunc.getContract(source_contract_address, web3_source_rpc, { node: node, fat_db: fat_db,  block_number: source_block });
+    const target_contract = await contractFunc.getContract(target_contract_address, web3_target_rpc, {node: node, fat_db: fat_db,  block_number: target_block });
 
     // 1. check if storageHash is different. 
     if (source_contract_proof.storageHash !== target_contract_proof.storageHash) {
