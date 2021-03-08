@@ -2,8 +2,9 @@ const { execSync } = require('child_process');
 const SimpleSmartContractStorage = artifacts.require("SimpleSmartContractStorage");
 const ContractWithLib = artifacts.require("ContractWithLib");
 const ConvertLib = artifacts.require('ConvertLib');
-const Web3 = require('web3');
 const fs = require('fs');
+const ContractHelper = require('../../contractHelper');
+const json = require('big-json');
 
 const source_dsl = 'http://localhost:8545';
 const jsonFileName = 'test.json';
@@ -37,15 +38,41 @@ contract('testGetState', (accounts) => {
         validJson["raw_contract_code"] = await web3.eth.getCode(simpleStorageInstance.address);
         contractWithLibByteCode = await web3.eth.getCode(contractWithLibInstance.address);
         convertLibByteCode = await web3.eth.getCode(ConvertLib.address);
-        validJson["state_references"][0] = validJson["state_references"][0].replace(/0x[2]{40}/, contractWithLibInstance.address);
-        validJson["state_references"][0] = validJson["state_references"][0].replace(/73[3]{40}/g, `73${libInstance.address.toLowerCase().substring(2)}`);
-        validJson["state_references"][0] = validJson["state_references"][0].replace(/73[3]{40}/g, `73${libInstance.address.toLowerCase().substring(2)}`);
-        validJson["state_references"][0] = validJson["state_references"][0].replace(/0x12345678910/, libInstance.address);
-        validJson["state_references"][0] = validJson["state_references"][0].replace(/contractWithLib/, contractWithLibByteCode);
-        validJson["state_references"][0] = validJson["state_references"][0].replace(/convertLib/, convertLibByteCode);
+        validJson["state_references"][0]['contract_address'] = contractWithLibInstance.address;
+        validJson["state_references"][0]['raw_contract_code'] = contractWithLibByteCode;
+        validJson["state_references"][0]['static_references'][0]['contract_address'] = libInstance.address;
+        validJson["state_references"][0]['static_references'][0]['raw_contract_code'] = convertLibByteCode;
 
         execSync(`rm ../${jsonFileName}`);
 
         expect(validJson).to.deep.equal(generatedJson);
+    });
+
+    it('should trigger writeStream to file if contract is too big and json should be valid.', async () => {
+        const bigJson = {};
+        for (let i = 0; i < 2; i++) {
+            bigJson[i.toString()] = '0x0000000000000000000000000000000000000000'.repeat(10000000);
+        }
+
+        await ContractHelper.writeToJson(bigJson, jsonFileName);
+
+        const readStream = fs.createReadStream(jsonFileName);
+        const parseStream = json.createParseStream();
+
+        let bigJsonFromFile;
+        await new Promise((resolve) => {
+            parseStream.on('data', function(pojo) {
+                bigJsonFromFile = pojo;
+            });
+            parseStream.on('end', () => {
+                resolve();
+            });
+
+            readStream.pipe(parseStream);
+        });
+
+        expect(bigJson).to.deep.equal(bigJsonFromFile);
+
+        execSync(`rm ${jsonFileName}`);
     });
 });

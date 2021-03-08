@@ -1,7 +1,7 @@
 const transactionsFunc = require('./getTransactions.js');
 const request = require('request-promise-native');
 const replayCsv = require('./replayCsv');
-const fs = require("fs");
+const contractHelper = require('./contractHelper');
 
 const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile}) => {
 
@@ -40,7 +40,7 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
             
     }
 
-    if (typeof targetFile !== 'undefined') writeToJson(storage, targetFile);
+    if (typeof targetFile !== 'undefined') contractHelper.writeToJson(storage, targetFile);
     
     return { contract_code: contract_code, storage: storage };
 };
@@ -101,16 +101,6 @@ const replayTransactions = async (transactions, rpc) => {
         });
     }
     return storage;
-};
-
-const writeToJson = (storage, targetFile) => {
-    const state = JSON.stringify(storage, null, 4);
-    fs.writeFileSync(targetFile, state, (err) => {
-        if (err) {
-            console.error(err);
-            return;
-        }
-    });
 };
 
 module.exports.getContract = getContract;
