@@ -29,6 +29,7 @@ contractHelper.getState(
         csv_path: program.file ? program.file : undefined,
         node: node,
         fat_db: program.fatDb ? program.fatDb : false,
+        max_depth: program.recursion ? program.recursion : -1,
         targetFile: program.output ? program.output : undefined
     }
 ).then(() => {

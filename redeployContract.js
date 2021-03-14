@@ -16,79 +16,84 @@ const portContract = (contract_address,
                       csv_path,
                       node,
                       fat_db,
+                      max_depth,
                       targetFile}) => {
 
     const source_web3 = new Web3(source_rpc);
-    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile}).then(async contract => {
+    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, max_depth, targetFile}).then(async contract => {
 
         const web3 = new Web3(target_rpc);
         // Mapping of referenced contract addresses on old and new rpc
         let storage = contract.storage;
         let contract_code = contract.contract_code;
         let referenced_contract_addresses = {};
-        //check if storage variable is a contract
-        for (const [index, paddedValue] of Object.entries(storage)) {
-            // remove leading zeros
-            const value = paddedValue.replace(/^0+/, '');
-            if (source_web3.utils.isAddress(value)) {
-                console.log('Address found in Storage: ', value);
-                // check if if it has been processed before
-                if (value in referenced_contract_addresses) {
-                    storage[index] = referenced_contract_addresses[value];
-                } else {
-                    const code = await source_web3.eth.getCode(value);
-                    console.log('Code: ', code);
-                    console.log('Length: ', code.length);
-                    // Externally owned accounts return 0x or 0x0
-                    // Contracts return entire code, i.e. > 3
-                    if (code.length > 3) {
-                        console.log('--- Reference found in state, migrating: ', value, ' ---');
-                        const address = await portContract(Web3.utils.toChecksumAddress(value), source_rpc, target_rpc, target_address, code_size, 
-                            {
-                                deployment_tx_hash,
-                                csv_path,
-                                node,
-                                fat_db,
-                                targetFile
-                        });
-                        const contractAddress = address.substring(2);
-                        console.log('contract address: ,', contractAddress);
-                        const paddingValue = "000000000000000000000000";
-                        const paddedAddress = paddingValue + contractAddress;
-                        console.log('padded address: ,', paddedAddress);
-                        referenced_contract_addresses[value] = paddedAddress;
 
-                        storage[index] = paddedAddress;
+        // only migrate if recursion limit is not reached
+        if(max_depth != 0) {
+            //check if storage variable is a contract
+            for (const [index, paddedValue] of Object.entries(storage)) {
+                // remove leading zeros
+                const value = paddedValue.replace(/^0+/, '');
+                if (source_web3.utils.isAddress(value)) {
+                    console.log('Address found in Storage: ', value);
+                    // check if if it has been processed before
+                    if (value in referenced_contract_addresses) {
+                        storage[index] = referenced_contract_addresses[value];
+                    } else {
+                        const code = await source_web3.eth.getCode(value);
+                        console.log('Code: ', code);
+                        console.log('Length: ', code.length);
+                        // Externally owned accounts return 0x or 0x0
+                        // Contracts return entire code, i.e. > 3
+                        if (code.length > 3) {
+                            console.log('--- Reference found in state, migrating: ', value, ' ---');
+                            const address = await portContract(Web3.utils.toChecksumAddress(value), source_rpc, target_rpc, target_address, code_size, 
+                                {
+                                    deployment_tx_hash,
+                                    csv_path,
+                                    node,
+                                    fat_db,
+                                    targetFile
+                            });
+                            const contractAddress = address.substring(2);
+                            console.log('contract address: ,', contractAddress);
+                            const paddingValue = "000000000000000000000000";
+                            const paddedAddress = paddingValue + contractAddress;
+                            console.log('padded address: ,', paddedAddress);
+                            referenced_contract_addresses[value] = paddedAddress;
+
+                            storage[index] = paddedAddress;
+                        }
                     }
                 }
             }
-        }
 
-        // getting all static references
-        const evm = new EVM(contract_code);
-        let referencedContracts = await evm.getOpcodes()
-            .filter( code => (code.name === 'PUSH20') )
-            .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
-            .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
-        // filter out all EOAs
-        referencedContracts = await referencedContracts.filter(async (address) => {
-            const referenced_address_code = await web3.eth.getCode(address);
-            return referenced_address_code.length > 3
-        });
-
-        for (const contract of referencedContracts) {
-            console.log('--- Reference found in bytecode, migrating: ', contract, ' ---');
-            const contractAddress = await portContract(contract, source_rpc, target_rpc, target_address, code_size, 
-                {
-                    deployment_tx_hash,
-                    csv_path,
-                    node,
-                    fat_db,
-                    targetFile
+            // getting all static references
+            const evm = new EVM(contract_code);
+            let referencedContracts = await evm.getOpcodes()
+                .filter( code => (code.name === 'PUSH20') )
+                .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
+                .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
+            // filter out all EOAs
+            referencedContracts = await referencedContracts.filter(async (address) => {
+                const referenced_address_code = await web3.eth.getCode(address);
+                return referenced_address_code.length > 3
             });
-            console.log(`Replacing ${contract.substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
-            const regex = new RegExp(contract.substring(2).toLowerCase());
-            contract_code = contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
+
+            for (const contract of referencedContracts) {
+                console.log('--- Reference found in bytecode, migrating: ', contract, ' ---');
+                const contractAddress = await portContract(contract, source_rpc, target_rpc, target_address, code_size, 
+                    {
+                        deployment_tx_hash,
+                        csv_path,
+                        node,
+                        fat_db,
+                        targetFile
+                });
+                console.log(`Replacing ${contract.substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
+                const regex = new RegExp(contract.substring(2).toLowerCase());
+                contract_code = contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
+            }
         }
 
         // TODO: Clean up this mess

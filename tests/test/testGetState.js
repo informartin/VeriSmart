@@ -48,6 +48,33 @@ contract('testGetState', (accounts) => {
         expect(validJson).to.deep.equal(generatedJson);
     });
 
+    it('should limit recursive reference retrieval as passed', async () => {
+        const simpleStorageInstance = await SimpleSmartContractStorage.deployed();
+        const contractWithLibInstance = await ContractWithLib.deployed();
+        const libInstance = await ConvertLib.deployed();
+
+        // saving smart contract lib in state of source contract
+        await simpleStorageInstance.setContract.sendTransaction(contractWithLibInstance.address);
+
+        const savedContract = await simpleStorageInstance.getContract.call();
+
+        expect(savedContract).to.equal(contractWithLibInstance.address);
+
+        let migrateCommand = `./cli/index get-state --source ${source_dsl} --contract ${simpleStorageInstance.address} --parity --fat-db -r 0 -o ${jsonFileName}`;
+        console.log(`Executing: \n${migrateCommand}`);
+
+        // start migration process
+        let output = execSync(migrateCommand, { cwd: './../' });
+        console.log(output.toString());
+
+        const generatedJson = JSON.parse(fs.readFileSync(`../${jsonFileName}`, { encoding: 'utf-8' }));
+
+        execSync(`rm ../${jsonFileName}`);
+
+        expect(generatedJson.static_references).to.be.an('array').that.is.empty;
+        expect(generatedJson.state_references).to.be.an('array').that.is.empty;
+    });
+
     it('should trigger writeStream to file if contract is too big and json should be valid.', async () => {
         const bigJson = {};
         for (let i = 0; i < 2; i++) {
