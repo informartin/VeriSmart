@@ -27,14 +27,15 @@ $ verismart help get-state
 Usage: verismart-get-state [options]
 
 Options:
-  -s, --source <required>           Source RPC
-  -c, --contract <required>         Source contract address
-  -d, --deployment_hash [optional]  Hash of the deployment transaction
-  -f, --file [optional]             Source file (csv) containing TXs to be replayed
-  -p, --parity                      Use parity compatible replay commands instead of geth
-  -q, --fat-db                      Use parity's feature fat-db for storage key retrieval
-  -o, --output [optional]           Save key pairs in json file
-  -h, --help                        output usage information
+  -s, --source <required>            Source RPC
+  -c, --contract <required>          Source contract address
+  -d, --deployment_hash [optional]   Hash of the deployment transaction
+  -f, --file [optional]              Source file (csv) containing TXs to be replayed
+  -p, --parity                       Use parity compatible replay commands instead of geth
+  -q, --fat-db [result_limit (int)]  Use key retrieval from parity's fat_db feature. Provide result limit for retrieved storage keys. Default: 100
+  -r, --recursion [optional]         Limit depth of recursively deployed dependency
+  -o, --output [optional]            Save key pairs in json file
+  -h, --help  
 ```
 Example usage:
 ```
@@ -47,16 +48,18 @@ $ verismart help migrate
 Usage: verismart-migrate [options]
 
 Options:
-  -s, --source <required>           Source RPC
-  -c, --contract <required>         Source contract address
-  -d, --deployment_hash [optional]  Hash of the deployment transaction
-  -f, --file [optional]             Source file (csv) containing TXs to be replayed
-  -p, --parity                      Use parity compatible replay commands instead of geth
-  -q, --fat-db                      Use parity's feature fat-db for storage key retrieval
-  -o, --output [optional]           Save key pairs in json file
-  -t, --target <required>           Target RPC
-  -a, --address <required>          Address to use on target blockchain (unlocked)
-  -h, --help                        output usage information
+  -s, --source <required>            Source RPC
+  -c, --contract <required>          Source contract address
+  -d, --deployment_hash [optional]   Hash of the deployment transaction
+  -f, --file [optional]              Source file (csv) containing TXs to be replayed
+  -p, --parity                       Use parity compatible replay commands instead of geth
+  -q, --fat-db [result_limit (int)]  Use key retrieval from parity's fat_db feature. Provide result limit for retrieved storage keys. Default: 100
+  -r, --recursion [optional]         Limit depth of recursively deployed dependency
+  -o, --output [optional]            Save key pairs in json file
+  -t, --target <required>            Target RPC
+  -a, --address <required>           Address to use on target blockchain (unlocked)
+  -s, --code_size [optional]         Max code size of contract in one transaction
+  -h, --help                         display help for command
 ```
 Example usage:
 
@@ -77,9 +80,13 @@ Usage: index-verify [options]
 Options:
   -S, --source_rpc <required>               Source RPC
   -s, --source_contract_address <required>  Source contract address
+  -b, --source_block [optional]             Used block for comparing the states. Can be: latest, earliest, pending or a specific blocknumber.
   -T, --target_rpc <required>               Target RPC
   -t, --target_contract_address <required>  Target contract address
-  -h, --help                                output usage information
+  -c, --target_block [optional]             Used block for comparing the states. Can be: latest, earliest, pending or a specific blocknumber.
+  -q, --fat_db [optional]                   Use key retrieval from parity's fat_db feature
+  -p, --parity                              Use parity compatible replay commands instead of geth
+  -h, --help                                display help for command
 ```
 Example usage:
 ```

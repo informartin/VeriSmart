@@ -29,7 +29,7 @@ echo "Done."
 
 # exec tests
 echo "Exec tests..."
-../node_modules/truffle/build/cli.bundled.js test --network test
+NODE_OPTIONS=--max_old_space_size=4096 ../node_modules/truffle/build/cli.bundled.js test --network test
 echo "Done."
 
 # stop chains

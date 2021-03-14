@@ -2,12 +2,13 @@ const Papa = require("papaparse");
 const fs = require('fs');
 
 module.exports = {
-    getTransactions: async (address, web3) => {
+    getTransactions: async (address, block_number, web3) => {
         console.log('Called getTransactions');
         const contract_address = address.toUpperCase();
         let relatedTransactions = [];
-        const blockNumber = await web3.eth.getBlockNumber();
-        for(let i = 0; i <= blockNumber; i++) {
+        if (block_number === 'latest')
+            block_number = await web3.eth.getBlockNumber();
+        for(let i = 0; i <= block_number; i++) {
             const block = await web3.eth.getBlock(i);
             const transactions = block.transactions;
             for (const txHash of transactions) {
@@ -29,16 +30,17 @@ module.exports = {
         return relatedTransactions;
     },
 
-    getTransactionsLight: async (address, web3, deployment_tx_hash) => {
+    getTransactionsLight: async (address, block_number, web3, deployment_tx_hash) => {
         console.log('--- Using light transaction retrieval ---');
         const contract_address = address.toUpperCase();
         let relatedTransactions = [];
-        const currentBlockNumber = await web3.eth.getBlockNumber();
+        if (block_number === 'latest')
+            block_number = await web3.eth.getBlockNumber();
         const deployment_tx = await web3.eth.getTransaction(deployment_tx_hash);
         relatedTransactions.push(deployment_tx_hash);
         const deployment_block = deployment_tx.blockNumber;
 
-        for(i = deployment_block; i <= currentBlockNumber; i++) {
+        for(i = deployment_block; i <= block_number; i++) {
             console.log('Current Block: ', i);
             const block = await web3.eth.getBlock(i);
             const transactions = block.transactions;

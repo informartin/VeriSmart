@@ -26,23 +26,23 @@ if ((!addressFormat.test(program.contract) && program.state_file === undefined) 
     process.exit();
 }
 
-contractHelper.extractContractFromJSONFile(program.state_file)
-    .then((stateJson) => {
-        return redeployFunc.portContract(
-            Web3.utils.toChecksumAddress(program.contract),
-            program.source,
-            program.target,
-            Web3.utils.toChecksumAddress(program.address),
-            program.code_size ? program.code_size : 1000,
-            {
-                deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
-                csv_path: program.file ? program.file : undefined,
-                node: node,
-                fat_db: program.fatDb ? program.fatDb : false,
-                stateJson,
-                targetFile: program.output ? program.output : undefined
-            }
-        );
-    }).then(() => {
-        process.exit();
-    });
+// TODO WRAP EVERYTHING IN A NEW ASYNC FUNCTION WHERE GETSTATEFROMJSONFILE IS CALLED TOO
+
+redeployFunc.portContract(
+    Web3.utils.toChecksumAddress(program.contract),
+    program.source,
+    program.target,
+    Web3.utils.toChecksumAddress(program.address),
+    program.code_size ? program.code_size : 1000,
+    {
+        deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
+        csv_path: program.file ? program.file : undefined,
+        node: node,
+        fat_db: program.fatDb ? program.fatDb : false,
+        max_depth: program.recursion ? program.recursion : -1,
+        block_number: program.block_number ? Web3.utils.toHex(program.block_number) : 'latest',
+        targetFile: program.output ? program.output : undefined
+    }
+).then(() => {
+    process.exit();
+});

@@ -1,9 +1,9 @@
 const transactionsFunc = require('./getTransactions.js');
 const request = require('request-promise-native');
 const replayCsv = require('./replayCsv');
-const fs = require("fs");
+const contractHelper = require('./contractHelper');
 
-const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, fat_db, targetFile}) => {
+const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, fat_db, block_number, targetFile}) => {
 
     console.log('Retrieving contract code for: ', contract_address);
 
@@ -17,7 +17,7 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
          * Retrieval via parity fat_db && eth_getStorageAt
          */
         contract_code = contractCode.substring(2);
-        storage = await getStorageFromParityFatDB(contract_address, web3, typeof fat_db === 'number' ? fat_db : 100);
+        storage = await getStorageFromParityFatDB(contract_address, web3, typeof fat_db === 'number' ? fat_db : 100, block_number);
     } else {
         /**
          * Standard retrieval
@@ -28,9 +28,9 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
         if (typeof csv_path !== 'undefined')
             transactions = await transactionsFunc.getTransactionsFromCSV(csv_path);
         if (typeof deployment_tx_hash === 'undefined')
-            transactions = await transactionsFunc.getTransactions(contract_address, web3);
+            transactions = await transactionsFunc.getTransactions(contract_address, block_number, web3);
         else
-            transactions = await transactionsFunc.getTransactionsLight(contract_address, web3, deployment_tx_hash);
+            transactions = await transactionsFunc.getTransactionsLight(contract_address, block_number, web3, deployment_tx_hash);
         
         console.log('Transactions Received: ', transactions);
         const rpc = web3.currentProvider.host;
@@ -40,12 +40,12 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
             
     }
 
-    if (typeof targetFile !== 'undefined') writeToJson(storage, targetFile);
+    if (typeof targetFile !== 'undefined') contractHelper.writeToJson(storage, targetFile);
     
     return { contract_code: contract_code, storage: storage };
 };
 
-const getStorageFromParityFatDB = async (contract_address, web3, result_limit) => {
+const getStorageFromParityFatDB = async (contract_address, web3, result_limit, block_number) => {
     /**
      * TODO Permit passing value via CLI
      */
@@ -61,7 +61,7 @@ const getStorageFromParityFatDB = async (contract_address, web3, result_limit) =
             url: web3.currentProvider.host,
             method: "POST",
             json: true,
-            body: {"jsonrpc":"2.0", "method":"parity_listStorageKeys","params": [contract_address, limit, offset], "id":1}
+            body: {"jsonrpc":"2.0", "method":"parity_listStorageKeys","params": [contract_address, limit, offset, block_number], "id":1}
         });
         
         result_limit = body.result.length;
@@ -101,16 +101,6 @@ const replayTransactions = async (transactions, rpc) => {
         });
     }
     return storage;
-};
-
-const writeToJson = (storage, targetFile) => {
-    const state = JSON.stringify(storage, null, 4);
-    fs.writeFileSync(targetFile, state, (err) => {
-        if (err) {
-            console.error(err);
-            return;
-        }
-    });
 };
 
 module.exports.getContract = getContract;
