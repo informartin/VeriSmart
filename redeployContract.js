@@ -11,14 +11,16 @@ const portContract = async (contract_address,
                       target_rpc,
                       target_address,
                       code_size,
-                      {deployment_tx_hash,
-                      csv_path,
-                      node,
-                      fat_db,
-                      max_depth,
-                      block_number,
-                      stateJson,
-                      targetFile}) => {
+                      {
+                        deployment_tx_hash,
+                        csv_path,
+                        node,
+                        fat_db,
+                        max_depth,
+                        block_number,
+                        stateJson,
+                        targetFile
+                    }) => {
 
     const source_web3 = new Web3(source_rpc);
     const target_web3 = new Web3(target_rpc);

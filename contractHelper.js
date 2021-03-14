@@ -2,10 +2,7 @@ const Web3 = require('web3');
 const { EVM } = require('evm');
 const contractFunc = require('./getContract.js');
 const fs = require("fs");
-const StreamChain = require('stream-chain');
-const Parser = require('stream-json/Parser');
 const BigJson = require('big-json');
-const { stringer } = require('stream-json/Stringer');
 
 const getState = async (contract_address,
                         source_web3,
@@ -107,23 +104,6 @@ const getState = async (contract_address,
             static_references.push(reference);
         }
     }
-    // get state of referenced contracts
-    const static_references = [];
-    for (const address of staticReferencedContracts) {
-        console.log('--- Reference found in static code: ', address, ' ---');
-        const reference = await getState(
-            Web3.utils.toChecksumAddress(address),
-            source_web3,
-            {
-                deployment_tx_hash,
-                csv_path,
-                node,
-                fat_db,
-                targetFile
-            }
-        );
-        static_references.push(JSON.stringify(reference, null, 4));
-    }
 
     const contractState = { 
         contract_address, 
@@ -151,7 +131,7 @@ const extractContractFromJSONFile = async (jsonFileName) => {
     console.log('Extracting data from json file...');
     if (jsonFileName === undefined) return undefined;
     const readStream = fs.createReadStream(jsonFileName);
-    const parseStream = json.createParseStream();
+    const parseStream = BigJson.createParseStream();
 
     let bigJson;
     return await new Promise((resolve) => {
@@ -186,18 +166,14 @@ const writeToJson = async (storage, targetFile) => {
                     body: storage
                 });
 
-                // pipelining it to the targetFile
-                const pipeline = StreamChain.chain([
-                    stringifiedStream,
-                    new Parser(),
-                    stringer(),
-                    fs.createWriteStream(targetFile)
-                ]);
-
-                pipeline.on('end', () => {
-                    console.log('Done!');
+                const writerStream = fs.createWriteStream(targetFile);
+                stringifiedStream.on('data', (strChunk) => {
+                    writerStream.write(strChunk);
+                });
+                stringifiedStream.on('end', () => {
+                    writerStream.end();
                     resolve();
-                })
+                });
             });
         } else {
             console.log('Could not write to file.');

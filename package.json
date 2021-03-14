@@ -25,8 +25,6 @@
     "fast-csv": "^4.3.6",
     "js-sha3": "^0.8.0",
     "keccak": "^3.0.1",
-    "leveldown": "^5.6.0",
-    "levelup": "^4.4.0",
     "merkle-patricia-tree": "^4.0.0",
     "node-gyp": "^7.1.2",
     "papaparse": "^5.3.0",
@@ -34,8 +32,6 @@
     "request": "^2.88.2",
     "request-promise-native": "^1.0.9",
     "rlp": "^2.2.6",
-    "stream-chain": "^2.2.4",
-    "stream-json": "^1.7.1",
     "web3": "^1.3.0"
   },
   "devDependencies": {
