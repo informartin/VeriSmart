@@ -17,10 +17,11 @@ const portContract = (contract_address,
                       node,
                       fat_db,
                       max_depth,
+                      block_number,
                       targetFile}) => {
 
     const source_web3 = new Web3(source_rpc);
-    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, max_depth, targetFile}).then(async contract => {
+    return contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, block_number, targetFile}).then(async contract => {
 
         const web3 = new Web3(target_rpc);
         // Mapping of referenced contract addresses on old and new rpc
@@ -53,6 +54,7 @@ const portContract = (contract_address,
                                     csv_path,
                                     node,
                                     fat_db,
+                                    block_number,
                                     targetFile
                             });
                             const contractAddress = address.substring(2);
