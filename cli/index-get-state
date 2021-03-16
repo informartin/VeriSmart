@@ -2,7 +2,7 @@
 
 const program = require('commander');
 const sharedAttributes = require('./index-shared-attributes');
-const contractFunc = require('../getContract');
+const contractHelper = require('../contractHelper');
 const Web3 = require("web3");
 
 sharedAttributes(program);
@@ -21,20 +21,18 @@ const web3 = new Web3(program.source);
 
 const node = program.parity ? 'parity' : 'geth';
 
-contractFunc.getContract(
+contractHelper.getState(
     web3.utils.toChecksumAddress(program.contract),
-    web3, {
+    web3,
+    {
         deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
         csv_path: program.file ? program.file : undefined,
         node: node,
         fat_db: program.fatDb ? program.fatDb : false,
+        max_depth: program.recursion ? program.recursion : -1,
+        block_number: program.block_number ? Web3.utils.toHex(program.block_number) : 'latest',
         targetFile: program.output ? program.output : undefined
     }
-).then(contract => {
-    const storage = contract.storage;
-    for (const [index, paddedValue] of Object.entries(storage)) {
-        console.log('key: ', index, ', value: ', paddedValue);
-    }
-}).then(() => {
+).then(() => {
     process.exit();
 });

@@ -239,4 +239,3 @@ function strMapToObj(strMap) {
 
 module.exports.getState = getState;
 module.exports.replayTransaction = replayTransaction;
-//getState_csv('http://localhost:8545', 'parity', '0xca29db4221c111888a7e80b12eac8a266da3ee0d', '/Users/martin/Programming/datasets/results_boleno_test.csv');
