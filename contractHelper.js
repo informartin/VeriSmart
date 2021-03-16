@@ -2,10 +2,7 @@ const Web3 = require('web3');
 const { EVM } = require('evm');
 const contractFunc = require('./getContract.js');
 const fs = require("fs");
-const StreamChain = require('stream-chain');
-const Parser = require('stream-json/Parser');
 const BigJson = require('big-json');
-const { stringer } = require('stream-json/Stringer');
 
 const getState = async (contract_address,
                         source_web3,
@@ -130,6 +127,25 @@ const getState = async (contract_address,
     return contractState;
 };
 
+const extractContractFromJSONFile = async (jsonFileName) => {
+    console.log('Extracting data from json file...');
+    if (jsonFileName === undefined) return undefined;
+    const readStream = fs.createReadStream(jsonFileName);
+    const parseStream = BigJson.createParseStream();
+
+    let bigJson;
+    return await new Promise((resolve) => {
+        parseStream.on('data', function(jsonData) {
+            bigJson = jsonData;
+        });
+        parseStream.on('end', () => {
+            console.log('Extraction done!');
+            resolve(bigJson);
+        });
+        readStream.pipe(parseStream);
+    });
+}
+
 const writeToJson = async (storage, targetFile) => {
     console.log('Writing to file...');
     try {
@@ -150,18 +166,14 @@ const writeToJson = async (storage, targetFile) => {
                     body: storage
                 });
 
-                // pipelining it to the targetFile
-                const pipeline = StreamChain.chain([
-                    stringifiedStream,
-                    new Parser(),
-                    stringer(),
-                    fs.createWriteStream(targetFile)
-                ]);
-
-                pipeline.on('end', () => {
-                    console.log('Done!');
+                const writerStream = fs.createWriteStream(targetFile);
+                stringifiedStream.on('data', (strChunk) => {
+                    writerStream.write(strChunk);
+                });
+                stringifiedStream.on('end', () => {
+                    writerStream.end();
                     resolve();
-                })
+                });
             });
         } else {
             console.log('Could not write to file.');
@@ -189,3 +201,4 @@ const printBigState = (storage) => {
 
 module.exports.getState = getState;
 module.exports.writeToJson = writeToJson;
+module.exports.extractContractFromJSONFile = extractContractFromJSONFile;

@@ -5,7 +5,7 @@ module.exports = (program) => {
         .option('-s, --source <required>', 'Source RPC')
         .option('-c, --contract <required>', 'Source contract address')
         .option('-d, --deployment_hash [optional]', 'Hash of the deployment transaction')
-        .option('-f, --file [optional]', 'Source file (csv) containing TXs to be replayed')
+        .option('-x, --transaction-input [optional]', 'Source file (csv) containing TXs to be replayed')
         .option('-p, --parity', 'Use parity compatible replay commands instead of geth')
         .option('-q, --fat-db [result_limit (int)]', 'Use key retrieval from parity\'s fat_db feature. Provide result limit for retrieved storage keys. Default: 100')
         .option('-b, --block_number [optional]', 'block number to create fork from and verify, default: latest')

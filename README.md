@@ -30,7 +30,7 @@ Options:
   -s, --source <required>            Source RPC
   -c, --contract <required>          Source contract address
   -d, --deployment_hash [optional]   Hash of the deployment transaction
-  -f, --file [optional]              Source file (csv) containing TXs to be replayed
+  -x, --transaction-input [optional] Source file (csv) containing TXs to be replayed
   -p, --parity                       Use parity compatible replay commands instead of geth
   -q, --fat-db [result_limit (int)]  Use key retrieval from parity's fat_db feature. Provide result limit for retrieved storage keys. Default: 100
   -r, --recursion [optional]         Limit depth of recursively deployed dependency
@@ -51,7 +51,8 @@ Options:
   -s, --source <required>            Source RPC
   -c, --contract <required>          Source contract address
   -d, --deployment_hash [optional]   Hash of the deployment transaction
-  -f, --file [optional]              Source file (csv) containing TXs to be replayed
+  -x, --transaction-input [optional] Source file (csv) containing TXs to be replayed
+  -f, --state_file [optional]        JSON file with key/value mapping of the state of the source contract
   -p, --parity                       Use parity compatible replay commands instead of geth
   -q, --fat-db [result_limit (int)]  Use key retrieval from parity's fat_db feature. Provide result limit for retrieved storage keys. Default: 100
   -r, --recursion [optional]         Limit depth of recursively deployed dependency

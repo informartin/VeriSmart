@@ -4,6 +4,8 @@ const program = require('commander');
 const sharedAttributes = require('./index-shared-attributes');
 const redeployFunc = require('../redeployContract');
 const Web3 = require('web3');
+const contractHelper = require('../contractHelper.js');
+const fs = require('fs');
 
 sharedAttributes(program);
 
@@ -12,32 +14,39 @@ program
     .option('-t, --target <required>', 'Target RPC')
     .option('-a, --address <required>', 'Address to use on target blockchain (unlocked)')
     .option('-s, --code_size [optional]', 'Max code size of contract in one transaction')
+    .option('-f, --state_file [optional]', 'JSON file with key/value mapping of the state of the source contract')
     .parse(process.argv);
 
 const node = program.parity ? 'parity' : 'geth';
 
 // check if addresses have the right format.
 const addressFormat = new RegExp(/0x[\d\w]+/);
-if (!addressFormat.test(program.contract) || !addressFormat.test(program.address)) {
+if ((!addressFormat.test(program.contract) && program.state_file === undefined) || !addressFormat.test(program.address)) {
     console.log('Addresses are not in the correct format. Please use "0x..." as a format.');
     process.exit();
 }
 
-redeployFunc.portContract(
-    Web3.utils.toChecksumAddress(program.contract),
-    program.source,
-    program.target,
-    Web3.utils.toChecksumAddress(program.address),
-    program.code_size ? program.code_size : 1000,
-    {
-        deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
-        csv_path: program.file ? program.file : undefined,
-        node: node,
-        fat_db: program.fatDb ? program.fatDb : false,
-        max_depth: program.recursion ? program.recursion : -1,
-        block_number: program.block_number ? Web3.utils.toHex(program.block_number) : 'latest',
-        targetFile: program.output ? program.output : undefined
-    }
-).then(() => {
+return new Promise(async (resolve) => {
+    const stateJson = await contractHelper.extractContractFromJSONFile(program.state_file);
+
+    await redeployFunc.portContract(
+        Web3.utils.toChecksumAddress(program.contract),
+        program.source,
+        program.target,
+        Web3.utils.toChecksumAddress(program.address),
+        program.code_size ? program.code_size : 1000,
+        {
+            stateJson,
+            deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
+            csv_path: program.file ? program.file : undefined,
+            node: node,
+            fat_db: program.fatDb ? program.fatDb : false,
+            max_depth: program.recursion ? program.recursion : -1,
+            block_number: program.block_number ? Web3.utils.toHex(program.block_number) : 'latest',
+            targetFile: program.output ? program.output : undefined
+        }
+    );
+    resolve();
+}).then(() => {
     process.exit();
 });

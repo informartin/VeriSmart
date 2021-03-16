@@ -35,7 +35,7 @@ contract('SimpleStorage', (accounts) => {
         output = execSync(validateCommand, { cwd: './../' });
         console.log(output.toString());
         
-        const result = output.toString().match(/[\w\W]The states of the smart contracts are equal/);
+        const result = output.toString().match(/[\w\W]+The states of the smart contracts are equal/);
 
         expect(result).not.equal(null);
     });
