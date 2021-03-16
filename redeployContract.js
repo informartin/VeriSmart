@@ -1,10 +1,10 @@
 const Web3 = require("web3");
 const createB = require('./createBytecode.js');
 const contractFunc = require('./getContract.js');
+const contractHelper = require('./contractHelper.js')
 const fs = require("fs");
 const rlp = require('rlp');
 const keccak = require('keccak');
-const { EVM } = require('evm');
 
 const portContract = async (contract_address,
                       source_rpc,
@@ -107,18 +107,7 @@ const portContract = async (contract_address,
         // getting all static references
         let referencedContracts;
         if (stateJson === undefined) {
-            const evm = new EVM(contract_code);
-            referencedContracts = await evm.getOpcodes()
-                .filter( code => (code.name === 'PUSH20') )
-                .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
-                .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
-            // filter out all EOAs
-            for (const contract of referencedContracts) {
-                const referenced_address_code = await source_web3.eth.getCode(contract);
-                if (referenced_address_code.length < 4) {
-                    referencedContracts.splice(referencedContracts.indexOf(contract), 1);
-                }
-            }
+            referencedContracts = await contractHelper.getStaticReferencesFromBytecode(source_web3, contract_address, contract_code);
             referencedContracts = referencedContracts.map(contract => { return { contract_address: contract }; });
         } else {
             referencedContracts = stateJson['static_references'];

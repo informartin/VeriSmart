@@ -72,18 +72,8 @@ const getState = async (contract_address,
         }
 
         // getting all static references
-        const evm = new EVM(contract_code);
-        staticReferencedContracts = await evm.getOpcodes()
-            .filter( code => (code.name === 'PUSH20') )
-            .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
-            .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
-        // filter out all EOAs
-        for (const address of staticReferencedContracts) {
-            const contractCode = await source_web3.eth.getCode(address);
-            if (!(contractCode.length > 3)) {
-                staticReferencedContracts.splice(staticReferencedContracts.indexOf(address), 1);
-            }
-        }
+        staticReferencedContracts = await getStaticReferencesFromBytecode(source_web3, contract_address,contract_code);
+
         // get state of referenced contracts
         for (const address of staticReferencedContracts) {
             console.log('--- Reference found in static code: ', address, ' ---');
@@ -126,6 +116,22 @@ const getState = async (contract_address,
 
     return contractState;
 };
+
+const getStaticReferencesFromBytecode = async (source_web3, contract_address, contract_code) => {
+    const evm = new EVM(contract_code);
+    staticReferencedContracts = await evm.getOpcodes()
+        .filter( code => (code.name === 'PUSH20' && code.pushData.toString('hex').length == 40) )
+        .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
+        .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address ) );
+    // filter out all EOAs
+    for (const address of staticReferencedContracts) {
+        const contractCode = await source_web3.eth.getCode(address);
+        if (!(contractCode.length > 3)) {
+            staticReferencedContracts.splice(staticReferencedContracts.indexOf(address), 1);
+        }
+    }
+    return staticReferencedContracts;
+}
 
 const extractContractFromJSONFile = async (jsonFileName) => {
     console.log('Extracting data from json file...');
@@ -202,3 +208,4 @@ const printBigState = (storage) => {
 module.exports.getState = getState;
 module.exports.writeToJson = writeToJson;
 module.exports.extractContractFromJSONFile = extractContractFromJSONFile;
+module.exports.getStaticReferencesFromBytecode = getStaticReferencesFromBytecode;
