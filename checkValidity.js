@@ -18,9 +18,10 @@ const isStateEqual = async (
     const web3_source_rpc = new Web3(source_rpc);
     const web3_target_rpc = new Web3(target_rpc);
 
-    // get the block were the contracts were deployed
+    // use latest block of source blockchain if none was specified
     let true_source_block = source_block !== undefined ? source_block : await web3_source_rpc.eth.getBlockNumber();
     
+    // get deployment block of init block if no block was specified
     let true_target_block;
     if (target_block === undefined) {
         const initContractAddress = await getInitContractAddress(target_contract_address, web3_target_rpc);
@@ -301,7 +302,7 @@ const getStaticReferences = async (
 ) => {
     const evm = new EVM(contract_code);
     let referencedContracts = evm.getOpcodes()
-        .filter( code => (code.name === 'PUSH20') )
+        .filter( code => (code.name === 'PUSH20' && code.pushData.toString('hex').length == 40) )
         .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
         .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address) );
 
@@ -406,3 +407,4 @@ const findDeploymentBlockProxyContract = async (initContractAddress, web3) => {
 };
 
 module.exports.isStateEqual = isStateEqual;
+module.exports.getStaticReferences = getStaticReferences;
