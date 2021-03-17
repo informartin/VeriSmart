@@ -307,10 +307,12 @@ const getStaticReferences = async (
         .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address) );
 
     // filter out all EOAs
-    referencedContracts = await referencedContracts.filter(async (address) => {
-        const referenced_address_code = await web3_rpc.eth.getCode(address);
-        return referenced_address_code.length > 3
-    });
+    for (const contract of referencedContracts) {
+        const referenced_address_code = await web3_rpc.eth.getCode(contract);
+        if (referenced_address_code.length < 4) {
+            referencedContracts.splice(referencedContracts.indexOf(contract), 1);
+        }
+    }
 
     return referencedContracts;
 };
