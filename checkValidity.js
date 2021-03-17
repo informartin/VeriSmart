@@ -1,7 +1,7 @@
 const Web3 = require("web3");
 const contractFunc = require('./getContract.js');
+const contractHelper = require('./contractHelper.js')
 const fs = require('fs');
-const { EVM } = require('evm');
 
 const isStateEqual = async (
     source_rpc,
@@ -178,13 +178,13 @@ const isStateOfReferencingContractsEqual= async (
     // 2. check if possible static references to other contracts are the same
     if (source_contract_proof.codeHash !== logic_contract_proof.codeHash) {
         console.log('2. CodeHashes are different.');
-        const source_contract_static_references = await getStaticReferences(web3_source_rpc, source_contract.contract_code, source_contract_address);
+        const source_contract_static_references = await contractHelper.getStaticReferences(web3_source_rpc, source_contract.contract_code, source_contract_address);
         console.log('Source contract static references to other contracts:');
         console.log(source_contract_static_references);
         if (source_contract_static_references.length < 1) return false;
         
         let logic_contract_code = logic_contract_address === target_contract_address ? target_contract.contract_code : (await web3_target_rpc.eth.getCode(logic_contract_address)).substring(2);
-        const target_contract_static_references = await getStaticReferences(web3_target_rpc, logic_contract_code, logic_contract_address);
+        const target_contract_static_references = await contractHelper.getStaticReferences(web3_target_rpc, logic_contract_code, logic_contract_address);
         console.log('Target contract static references to other contracts:');
         console.log(target_contract_static_references);
         if (source_contract_static_references.length !== target_contract_static_references.length) return false;
@@ -295,28 +295,6 @@ const getContractValues = async (contract, web3_rpc) => {
     return values;
 }
 
-const getStaticReferences = async (
-    web3_rpc,
-    contract_code,
-    contract_address
-) => {
-    const evm = new EVM(contract_code);
-    let referencedContracts = evm.getOpcodes()
-        .filter( code => (code.name === 'PUSH20' && code.pushData.toString('hex').length == 40) )
-        .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
-        .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address) );
-
-    // filter out all EOAs
-    for (const contract of referencedContracts) {
-        const referenced_address_code = await web3_rpc.eth.getCode(contract);
-        if (referenced_address_code.length < 4) {
-            referencedContracts.splice(referencedContracts.indexOf(contract), 1);
-        }
-    }
-
-    return referencedContracts;
-};
-
 // binary search for block where contract was deployed
 const findDeploymentBlock = async (contract_address, web3) => {
     let low = 0;
@@ -409,4 +387,3 @@ const findDeploymentBlockProxyContract = async (initContractAddress, web3) => {
 };
 
 module.exports.isStateEqual = isStateEqual;
-module.exports.getStaticReferences = getStaticReferences;

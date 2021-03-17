@@ -1,7 +1,7 @@
 const Web3 = require("web3");
 const createB = require('./createBytecode.js');
 const contractFunc = require('./getContract.js');
-const checkValidity = require('./checkValidity.js')
+const contractHelper = require('./contractHelper.js')
 const fs = require("fs");
 const rlp = require('rlp');
 const keccak = require('keccak');
@@ -107,7 +107,7 @@ const portContract = async (contract_address,
         // getting all static references
         let referencedContracts;
         if (stateJson === undefined) {
-            referencedContracts = await checkValidity.getStaticReferences(source_web3, contract_code, contract_address);
+            referencedContracts = await contractHelper.getStaticReferences(source_web3, contract_code, contract_address);
             referencedContracts = referencedContracts.map(contract => { return { contract_address: contract }; });
         } else {
             referencedContracts = stateJson['static_references'];

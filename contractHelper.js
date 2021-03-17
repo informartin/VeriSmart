@@ -1,8 +1,8 @@
 const Web3 = require('web3');
 const contractFunc = require('./getContract.js');
-const checkValidity = require('./checkValidity.js');
 const fs = require("fs");
 const BigJson = require('big-json');
+const { EVM } = require('evm');
 
 const getState = async (contract_address,
                         source_web3,
@@ -72,7 +72,7 @@ const getState = async (contract_address,
         }
 
         // getting all static references
-        staticReferencedContracts = await checkValidity.getStaticReferences(source_web3, contract_code, contract_address);
+        staticReferencedContracts = await getStaticReferences(source_web3, contract_code, contract_address);
 
         // get state of referenced contracts
         for (const address of staticReferencedContracts) {
@@ -189,6 +189,29 @@ const printBigState = (storage) => {
     }
 }
 
+const getStaticReferences = async (
+    web3_rpc,
+    contract_code,
+    contract_address
+) => {
+    const evm = new EVM(contract_code);
+    let referencedContracts = evm.getOpcodes()
+        .filter( code => (code.name === 'PUSH20' && code.pushData.toString('hex').length == 40) )
+        .map( code => Web3.utils.toChecksumAddress(`0x${code.pushData.toString('hex')}`) )
+        .filter( address => (address.search(/0x[fF]{40}/) === -1 && address !== contract_address) );
+
+    // filter out all EOAs
+    for (const contract of referencedContracts) {
+        const referenced_address_code = await web3_rpc.eth.getCode(contract);
+        if (referenced_address_code.length < 4) {
+            referencedContracts.splice(referencedContracts.indexOf(contract), 1);
+        }
+    }
+
+    return referencedContracts;
+};
+
 module.exports.getState = getState;
 module.exports.writeToJson = writeToJson;
 module.exports.extractContractFromJSONFile = extractContractFromJSONFile;
+module.exports.getStaticReferences = getStaticReferences;
