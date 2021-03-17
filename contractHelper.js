@@ -128,13 +128,20 @@ const getState = async (contract_address,
 };
 
 const extractContractFromJSONFile = async (jsonFileName) => {
-    console.log('Extracting data from json file...');
+    console.log(`Extracting data from json file ${jsonFileName}...`);
     if (jsonFileName === undefined) return undefined;
-    const readStream = fs.createReadStream(jsonFileName);
+    let fd;
+    try {
+        fd = fs.openSync(jsonFileName);
+    } catch (error) {
+        console.log('File does not exist.');
+        return undefined;
+    }
+    const readStream = fs.createReadStream(undefined, { fd });
     const parseStream = BigJson.createParseStream();
 
     let bigJson;
-    return await new Promise((resolve) => {
+    return new Promise((resolve) => {
         parseStream.on('data', function(jsonData) {
             bigJson = jsonData;
         });

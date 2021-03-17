@@ -1,11 +1,10 @@
 const { execSync } = require('child_process');
-const { assert } = require('console');
 const SimpleStorage = artifacts.require("SimpleStorage");
 const Web3 = require('web3');
 
 const source_dsl = 'http://localhost:8545';
 const target_dsl = 'http://localhost:8540';
-const target_address = '0x00ce0c25d2a45e2f22d4416606d928b8c088f8db';
+const continueMigrationFile = 'test/data/interruptedMigration.json';
 
 contract('SimpleStorage', (accounts) => {
     it('should migrate simple contract to new address.', async () => {
@@ -13,7 +12,7 @@ contract('SimpleStorage', (accounts) => {
         const source_b = await simpleStorageInstance.getB.call();
         
         // start migration process
-        const migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${target_address} --parity`;
+        const migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} -i ./tests/${continueMigrationFile} --address ${accounts[0]} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());
@@ -38,5 +37,6 @@ contract('SimpleStorage', (accounts) => {
         const result = output.toString().match(/[\w\W]+The states of the smart contracts are equal/);
 
         expect(result).not.equal(null);
+        execSync(`rm ${continueMigrationFile}`);
     });
 });

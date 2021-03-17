@@ -15,6 +15,7 @@ program
     .option('-a, --address <required>', 'Address to use on target blockchain (unlocked)')
     .option('-s, --code_size [optional]', 'Max code size of contract in one transaction')
     .option('-f, --state_file [optional]', 'JSON file with key/value mapping of the state of the source contract')
+    .option('-i, --continue_migration [optional]', 'Provide an alternative input/output json file name for the continued migration process')
     .parse(process.argv);
 
 const node = program.parity ? 'parity' : 'geth';
@@ -43,6 +44,7 @@ return new Promise(async (resolve) => {
             fat_db: program.fatDb ? program.fatDb : false,
             max_depth: program.recursion ? program.recursion : -1,
             block_number: program.block_number ? Web3.utils.toHex(program.block_number) : 'latest',
+            continue_migration_file: program.continue_migration ? program.continue_migration : undefined,
             targetFile: program.output ? program.output : undefined
         }
     );

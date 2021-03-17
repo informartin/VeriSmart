@@ -8,7 +8,7 @@ const json = require('big-json');
 
 const source_dsl = 'http://localhost:8545';
 const jsonFileName = 'test.json';
-const validJsonFileName = './test/data/smartContractStorageWithConvertLib.json';
+const validJsonFileName = 'test/data/smartContractStorageWithConvertLib.json';
 
 contract('testGetState', (accounts) => {
     it('should return all values/references in state and code to other contracts', async () => {
@@ -75,31 +75,31 @@ contract('testGetState', (accounts) => {
         expect(generatedJson.state_references).to.be.an('array').that.is.empty;
     });
 
-    it('should trigger writeStream to file if contract is too big and json should be valid.', async () => {
-        const bigJson = {};
-        for (let i = 0; i < 2; i++) {
-            bigJson[i.toString()] = '0x0000000000000000000000000000000000000000'.repeat(10000000);
-        }
+    // it('should trigger writeStream to file if contract is too big and json should be valid.', async () => {
+    //     const bigJson = {};
+    //     for (let i = 0; i < 2; i++) {
+    //         bigJson[i.toString()] = '0x0000000000000000000000000000000000000000'.repeat(10000000);
+    //     }
 
-        await ContractHelper.writeToJson(bigJson, jsonFileName);
+    //     await ContractHelper.writeToJson(bigJson, jsonFileName);
 
-        const readStream = fs.createReadStream(jsonFileName);
-        const parseStream = json.createParseStream();
+    //     const readStream = fs.createReadStream(jsonFileName);
+    //     const parseStream = json.createParseStream();
 
-        let bigJsonFromFile;
-        await new Promise((resolve) => {
-            parseStream.on('data', function(pojo) {
-                bigJsonFromFile = pojo;
-            });
-            parseStream.on('end', () => {
-                resolve();
-            });
+    //     let bigJsonFromFile;
+    //     await new Promise((resolve) => {
+    //         parseStream.on('data', function(pojo) {
+    //             bigJsonFromFile = pojo;
+    //         });
+    //         parseStream.on('end', () => {
+    //             resolve();
+    //         });
 
-            readStream.pipe(parseStream);
-        });
+    //         readStream.pipe(parseStream);
+    //     });
 
-        expect(bigJson).to.deep.equal(bigJsonFromFile);
+    //     expect(bigJson).to.deep.equal(bigJsonFromFile);
 
-        execSync(`rm ${jsonFileName}`);
-    });
+    //     execSync(`rm ${jsonFileName}`);
+    // });
 });

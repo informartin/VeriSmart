@@ -1,26 +1,49 @@
 const Web3 = require("web3");
 const createB = require('./createBytecode.js');
 const contractFunc = require('./getContract.js');
+const contractHelper = require('./contractHelper.js');
 const fs = require("fs");
 const rlp = require('rlp');
 const keccak = require('keccak');
 const { EVM } = require('evm');
 
 const portContract = async (contract_address,
-                      source_rpc,
-                      target_rpc,
-                      target_address,
-                      code_size,
-                      {
-                        deployment_tx_hash,
-                        csv_path,
-                        node,
-                        fat_db,
-                        max_depth,
-                        block_number,
-                        stateJson,
-                        targetFile
-                    }) => {
+                            source_rpc,
+                            target_rpc,
+                            target_address,
+                            code_size,
+                            {
+                                deployment_tx_hash,
+                                csv_path,
+                                node,
+                                fat_db,
+                                max_depth,
+                                block_number,
+                                stateJson,
+                                migratedContracts,
+                                continue_migration_file,
+                                targetFile
+                            }
+    ) => {
+    const migratedContractsFile = continue_migration_file ? continue_migration_file : 'interrupted-migration.json';
+    // get current migration state from file or from parameter
+    let interruptedMigration = migratedContracts === undefined ? await contractHelper.extractContractFromJSONFile(migratedContractsFile) : migratedContracts;
+    if (interruptedMigration === undefined || interruptedMigration.sourceAddress !== contract_address) {
+        console.log(`${migratedContractsFile} contains information about another migration and can't be used. If this migration fails, the file will be overwritten.`);
+        interruptedMigration = { 
+            sourceAddress: contract_address,
+            migratedKeys: {},
+            migrationCompleted: false,
+            logicAddress: undefined,
+            initAddress: undefined,
+            proxyAddress: undefined,
+            staticReferences: {},
+            stateReferences: {}
+        };
+    } else if (interruptedMigration.migrationCompleted) {
+        console.log('This contract was already successfully migrated.');
+        return interruptedMigration;
+    }
 
     const source_web3 = new Web3(source_rpc);
     const target_web3 = new Web3(target_rpc);
@@ -49,7 +72,17 @@ const portContract = async (contract_address,
                     // Contracts return entire code, i.e. > 3
                     if (code.length > 3) {
                         console.log('--- Reference found in state, migrating: ', value, ' ---');
-                        const address = await portContract(Web3.utils.toChecksumAddress(value), source_rpc, target_rpc, target_address, code_size, 
+                        const migratedContractsOfReference = interruptedMigration.stateReferences[index] !== undefined ? interruptedMigration.stateReferences[index] : {
+                            sourceAddress: Web3.utils.toChecksumAddress(value),
+                            migratedKeys: {},
+                            migrationCompleted: false,
+                            logicAddress: undefined,
+                            initAddress: undefined,
+                            proxyAddress: undefined,
+                            staticReferences: {},
+                            stateReferences: {}
+                        };
+                        const migrationResult = await portContract(Web3.utils.toChecksumAddress(value), source_rpc, target_rpc, target_address, code_size, 
                             {
                                 deployment_tx_hash,
                                 csv_path,
@@ -58,8 +91,19 @@ const portContract = async (contract_address,
                                 stateJson,
                                 max_depth,
                                 block_number,
+                                migratedContracts: migratedContractsOfReference,
                                 targetFile: undefined
                         });
+                        interruptedMigration.stateReferences[index] = migrationResult;
+                        if (!migrationResult.migrationCompleted) {
+                            if (migratedContracts !== undefined) return interruptedMigration;
+
+                            console.log(`Could not migrate state referenced contract at source bc ${migratedContractsOfReference.sourceAddress}, will save migration state to ${migratedContractsFile}`);
+                            await contractHelper.writeToJson(interruptedMigration, migratedContractsFile);
+                            return undefined;
+                        }
+
+                        const address = migrationResult.proxyAddress !== undefined ? migrationResult.proxyAddress : migrationResult.logicAddress;
                         const contractAddress = address.substring(2);
                         console.log('contract address: ,', contractAddress);
                         const paddingValue = "000000000000000000000000";
@@ -73,7 +117,7 @@ const portContract = async (contract_address,
             }
         }
     
-        // push state references from stat
+        // push state references from stateReferences from stateJSON
         if (stateJson !== undefined) {
             for (const stateReference of source_contract['state_references']) {
                 if (stateReference['contract_address'] in referenced_contract_addresses) {
@@ -81,7 +125,17 @@ const portContract = async (contract_address,
                     storage[stateReference['index']] = referenced_contract_addresses[stateReference['contract_address']];
                 } else {
                     console.log('--- Reference found in state, migrating: ', stateReference['contract_address'], ' ---');
-                    const address = await portContract(Web3.utils.toChecksumAddress(stateReference['contract_address']), source_rpc, target_rpc, target_address, code_size, 
+                    const migratedContractsOfReference = interruptedMigration.stateReferences[stateReference['index']] !== undefined ? interruptedMigration.stateReferences[stateReference['index']] : {
+                        sourceAddress: Web3.utils.toChecksumAddress(stateReference['contract_address']),
+                        migratedKeys: {},
+                        migrationCompleted: false,
+                        logicAddress: undefined,
+                        initAddress: undefined,
+                        proxyAddress: undefined,
+                        staticReferences: {},
+                        stateReferences: {}
+                    };
+                    const migrationResult = await portContract(Web3.utils.toChecksumAddress(stateReference['contract_address']), source_rpc, target_rpc, target_address, code_size, 
                         {
                             deployment_tx_hash,
                             csv_path,
@@ -90,8 +144,19 @@ const portContract = async (contract_address,
                             max_depth,
                             block_number,
                             targetFile: undefined,
+                            migratedContracts: migratedContractsOfReference,
                             stateJson: stateReference
                     });
+                    interruptedMigration.stateReferences[stateReference['index']] = migrationResult;
+                    if (!migrationResult.migrationCompleted) {
+                        if (migratedContracts !== undefined) return interruptedMigration;
+
+                        console.log(`Could not migrate state referenced contract at source bc ${migratedContractsOfReference.sourceAddress}, will save migration state to ${migratedContractsFile}`);
+                        await contractHelper.writeToJson(interruptedMigration, migratedContractsFile);
+                        return undefined;
+                    }
+
+                    const address = migrationResult.proxyAddress !== undefined ? migrationResult.proxyAddress : migrationResult.logicAddress;
                     const contractAddress = address.substring(2);
                     console.log('contract address: ,', contractAddress);
                     const paddingValue = "000000000000000000000000";
@@ -127,7 +192,17 @@ const portContract = async (contract_address,
     
         for (const contract of referencedContracts) {
             console.log('--- Reference found in bytecode, migrating: ', contract['contract_address'], ' ---');
-            const contractAddress = await portContract(contract['contract_address'], source_rpc, target_rpc, target_address, code_size, 
+            const migratedContractsOfReference = interruptedMigration.staticReferences[contract['contract_address']] !== undefined ? interruptedMigration.staticReferences[contract['contract_address']] : {
+                sourceAddress: contract['contract_address'],
+                migratedKeys: {},
+                migrationCompleted: false,
+                logicAddress: undefined,
+                initAddress: undefined,
+                proxyAddress: undefined,
+                staticReferences: {},
+                stateReferences: {}
+            };
+            const migrationResult = await portContract(contract['contract_address'], source_rpc, target_rpc, target_address, code_size, 
                 {
                     deployment_tx_hash,
                     csv_path,
@@ -136,8 +211,18 @@ const portContract = async (contract_address,
                     max_depth,
                     block_number,
                     stateJson: stateJson ? contract : undefined,
+                    migratedContracts: migratedContractsOfReference,
                     targetFile: undefined
             });
+            interruptedMigration.staticReferences[contract['contract_address']] = migrationResult;
+            if (!migrationResult.migrationCompleted) {
+                if (migratedContracts !== undefined) return interruptedMigration;
+
+                console.log(`Could not migrate state referenced contract at source bc ${migratedContractsOfReference.sourceAddress}, will save migration state to ${migratedContractsFile}`);
+                await contractHelper.writeToJson(interruptedMigration, migratedContractsFile);
+                return undefined;
+            }
+            const contractAddress = migrationResult.proxyAddress !== undefined ? migrationResult.proxyAddress : migrationResult.logicAddress;
             console.log(`Replacing ${contract['contract_address'].substring(2).toLowerCase()} with ${contractAddress.substring(2).toLowerCase()}`);
             const regex = new RegExp(contract['contract_address'].substring(2).toLowerCase());
             contract_code = contract_code.replace(regex, contractAddress.substring(2).toLowerCase());
@@ -149,99 +234,144 @@ const portContract = async (contract_address,
     let deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
     // TODO: Should calculate proper gas requirement for executing code
     console.log('Length', deploy_code.length);
+    let migrationResult;
     if (deploy_code.length < code_size) {
-        return await deployLogic(target_web3, target_address, deploy_code);
+        migrationResult = await deployLogic(target_web3, target_address, deploy_code, interruptedMigration);
     } else {
-        return await deployLargeContract(target_web3, target_address, contract_code, storage);
+        migrationResult = await deployLargeContract(target_web3, target_address, contract_code, storage, interruptedMigration);
     }
+    // only write to file if not called recursively
+    if (migratedContracts === undefined) await contractHelper.writeToJson(migrationResult, migratedContractsFile);
+    return migrationResult;
 };
 
-const deployLargeContract = async (web3, target_address, contract_code, contract_state) => {
+const deployLargeContract = async (web3, target_address, contract_code, contract_state, interruptedMigration) => {
     //
     // Deploy Logic Contract
     //
     const deploy_code = "0x" + createB.createBytecode(contract_code, {});
-    const logicContractAddress = await deployLogic(web3, target_address, deploy_code);
+    const migrationResult = await deployLogic(web3, target_address, deploy_code, interruptedMigration);
+    if (!migrationResult.migrationCompleted) {
+        console.log('Could not migrate logicContract. Saving current migration state.');
+        return migrationResult;
+    }
+    migrationResult.migrationCompleted = false;
+    const logicContractAddress = migrationResult.logicAddress;
     //
     // Deploy ProxyContract
     //
-    const proxyJsonRaw = fs.readFileSync("./contracts/ProxyContract.json");
-    const proxyJson = JSON.parse(proxyJsonRaw);
-    let proxyCode = proxyJson.bytecode;
-    // Replace placeholder address with logic contract address
-    proxyCode = proxyCode.replace('2222222222222222222222222222222222222222', logicContractAddress.substring(2));
-    // Calculate address of initialization contract and insert into proxy
-    const currentNonce = await web3.eth.getTransactionCount(target_address);
-    const calculatedInitContractAddress = calculateContractAddress(currentNonce + 1, target_address);
-    proxyCode = proxyCode.replace('8888888888888888888888888888888888888888', calculatedInitContractAddress);
-    const proxyContract = new web3.eth.Contract([]);
-    let proxyAddress;
     console.log('--- Deploy Proxy ---');
-    console.log('Proxy bytecode: ', proxyCode);
-    const proxyDeployed = await proxyContract.deploy({data: proxyCode}).send({
-        from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
-    })
-        .on('error', function (error) {
-            console.log('Error: ', error)
+    if (migrationResult.proxyAddress === undefined) {
+        const proxyJsonRaw = fs.readFileSync("./contracts/ProxyContract.json");
+        const proxyJson = JSON.parse(proxyJsonRaw);
+        let proxyCode = proxyJson.bytecode;
+        // Replace placeholder address with logic contract address
+        proxyCode = proxyCode.replace('2222222222222222222222222222222222222222', logicContractAddress.substring(2));
+        // Calculate address of initialization contract and insert into proxy
+        const currentNonce = await web3.eth.getTransactionCount(target_address);
+        const calculatedInitContractAddress = calculateContractAddress(currentNonce + 1, target_address);
+        proxyCode = proxyCode.replace('8888888888888888888888888888888888888888', calculatedInitContractAddress);
+        const proxyContract = new web3.eth.Contract([]);
+        console.log('Proxy bytecode: ', proxyCode);
+        await proxyContract.deploy({data: proxyCode}).send({
+            from: target_address,
+            gas: 4700000,
+            gasPrice: '2000000000'
         })
-        .on('transactionHash', function (transactionHash) {
-            console.log('TxHash: ', transactionHash)
-        })
-        .on('receipt', function (receipt) {
-            proxyAddress = receipt.contractAddress;
-            console.log('Proxy Contract: ', receipt.contractAddress); // contains the new contract address
-            return receipt;
-        });
+            .on('error', function (error) {
+                console.log('Error: ', error);
+                migrationResult.proxyAddress = undefined;
+                return migrationResult;
+            })
+            .on('transactionHash', function (transactionHash) {
+                console.log('TxHash: ', transactionHash);
+            })
+            .on('receipt', function (receipt) {
+                migrationResult.proxyAddress = Web3.utils.toChecksumAddress(receipt.contractAddress);
+                console.log('Proxy Contract: ', receipt.contractAddress); // contains the new contract address
+                return receipt;
+            });
+        if (migrationResult.proxyAddress === undefined) {
+            console.log('Could not migrate proxyContract. Saving current migration state.');
+            return migrationResult;
+        }
+    } else {
+        console.log(`Proxy already deployed at ${migrationResult.proxyAddress}`);
+    }
 
     //
     // Deploy Initialization Contract
     //
+    let initInstance;
     const initJsonRaw = fs.readFileSync("./contracts/InitContract.json");
     const initJson = JSON.parse(initJsonRaw);
     let initCode = initJson.bytecode;
     let initAbi = initJson.abi;
     // Replace placeholder address with logic contract address
-    initCode = initCode.replace('2222222222222222222222222222222222222222', proxyAddress.substring(2));
+    initCode = initCode.replace('2222222222222222222222222222222222222222', migrationResult.proxyAddress.substring(2).toLowerCase());
     const initContract = new web3.eth.Contract(initAbi);
     console.log('--- Deploy Init Contract ---');
-    console.log('Proxy bytecode: ', initCode);
-    let initContractAddress;
-    const initInstance = await initContract.deploy({data: initCode}).send({
-        from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
-    })
-        .on('error', function (error) {
-            console.log('Error: ', error)
+    if (migrationResult.initAddress === undefined) {
+        console.log('Proxy bytecode: ', initCode);
+        initInstance = await initContract.deploy({ data: initCode }).send({
+            from: target_address,
+            gas: 4700000,
+            gasPrice: '2000000000'
         })
-        .on('transactionHash', function (transactionHash) {
-            console.log('TxHash: ', transactionHash)
-        })
-        .on('receipt', function (receipt) {
-            initContractAddress = receipt.contractAddress;
-            console.log('Init address: ', receipt.contractAddress); // contains the new contract address
-            return receipt;
-        });
-
-    initInstance.options.address = initContractAddress;
+            .on('error', function (error) {
+                console.log('Error: ', error);
+                migrationResult.initAddress = undefined;
+                return;
+            })
+            .on('transactionHash', function (transactionHash) {
+                console.log('TxHash: ', transactionHash);
+            })
+            .on('receipt', function (receipt) {
+                migrationResult.initAddress = Web3.utils.toChecksumAddress(receipt.contractAddress);
+                console.log('Init address: ', receipt.contractAddress); // contains the new contract address
+                return receipt;
+            });
+        if (migrationResult.initAddress === undefined) {
+            console.log('Could not migrate initContract. Saving current migration state.');
+            return migrationResult;
+        }
+    } else {
+        console.log(`InitContract already deployed at ${migrationResult.initAddress}`);
+    }
+    
+    initInstance.options.address = migrationResult.initAddress;
     // Set storage
     const storageKeys = Object.keys(contract_state);
     let keys = [];
     let values = [];
     for(let i = 0; i < storageKeys.length; i++) {
         const key  = storageKeys[i];
-        keys.push('0x' + key);
-        values.push('0x' + contract_state[key]);
+        if (migrationResult.migratedKeys[`0x${key}`]) continue;
+        keys.push(`0x${key}`);
+        values.push(`0x${contract_state[key]}`);
         if(((i+1) % 40) == 0) {
-            // TODO check if values were migrated, if not then write to json and exit program
-            await setValuesOnInitContract(target_address, initInstance, keys, values);
+            const migrated = await setValuesOnInitContract(target_address, initInstance, keys, values);
+            if (migrated) {
+                keys.forEach((key) => {
+                    migrationResult.migratedKeys[key] = true;
+                });
+            } else {
+                console.log('Could not migrate some key value pairs. Saving current migration state.');
+                return migrationResult;
+            }
             keys = [];
             values = [];
         }
     }
-    await setValuesOnInitContract(target_address, initInstance, keys, values);
+    const migrated = await setValuesOnInitContract(target_address, initInstance, keys, values);
+    if (migrated) {
+        keys.forEach((key) => {
+            migrationResult.migratedKeys[key] = true;
+        });
+    } else {
+        console.log('Could not migrate some key value pairs. Saving current migration state.');
+        return migrationResult;
+    }
 
     // selfdestruct initContract
     await initInstance.methods.close().send({
@@ -250,10 +380,10 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         gasPrice: '2000000000'
     })
         .on('error', function (error) {
-            console.log('Error while trying to destruct initContract: ', error)
+            console.log('Error while trying to destruct initContract: ', error);
         })
         .on('transactionHash', function (transactionHash) {
-            console.log('TxHash: ', transactionHash)
+            console.log('TxHash: ', transactionHash);
         })
         .on('receipt', function (receipt) {
             console.log('InitContract got selfdestructed.');
@@ -263,53 +393,64 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         .catch((error) => {
             console.log('Error while trying to destruct initContract: ', error);
         });
-    return proxyAddress;
+    migrationResult.migrationCompleted = true;
+    return migrationResult;
 };
 
 const setValuesOnInitContract = async (target_address, initContract, keys, values) => {
     console.log('keys: ', keys);
     console.log('values: ', values);
-    if (keys.length < 1) return "";
+    if (keys.length < 1) return true;
+    let migrated = false;
     await initContract.methods.setValue(keys, values).send({
         from: target_address,
         gas: 4700000,
         gasPrice: '2000000000'
     })
         .on('error', function (error) {
-            console.log('Error: ', error)
+            console.log('Error: ', error);
+            return;
         })
         .on('transactionHash', function (transactionHash) {
             console.log('TxHash: ', transactionHash)
         })
         .on('receipt', function (receipt) {
-            console.log('Added storage values'); // contains the new contract address
+            console.log('Added storage values');
             console.log('Receipt: ', receipt);
+            migrated = true;
             return receipt;
         });
-        // TODO return bool if setValue failed or not
+    return migrated;
 };
 
-const deployLogic = async (web3, target_address, deploy_code) => {
+const deployLogic = async (web3, target_address, deploy_code, interruptedMigration) => {
     console.log('--- Deploy Logic ---');
+    if (interruptedMigration.logicAddress !== undefined) {
+        console.log(`Logic contract is already deployed at ${interruptedMigration.logicAddress}`);
+        return interruptedMigration;
+    }
     console.log('Deploy code: ', deploy_code);
     let myContract = new web3.eth.Contract([]);
-    let contractAddress;
+    let migrationResult = interruptedMigration;
     await myContract.deploy({data: deploy_code}).send({
         from: target_address,
         gas: 4700000,
         gasPrice: '2000000000'
     })
         .on('error', function (error) {
-            console.log('Error: ', error)
+            console.log('Error: ', error);
+            return migrationResult;
         })
         .on('transactionHash', function (transactionHash) {
-            console.log('TxHash: ', transactionHash)
+            console.log('TxHash: ', transactionHash);
         })
         .on('receipt', function (receipt) {
-            contractAddress = receipt.contractAddress;
-            console.log('Logic Contract: ', contractAddress); // contains the new contract address
+            console.log('Logic Contract: ', receipt.contractAddress); // contains the new contract address
+            migrationResult.logicAddress = Web3.utils.toChecksumAddress(receipt.contractAddress);
+            migrationResult.migrationCompleted = true;
+            return migrationResult;
         });
-    return contractAddress;
+    return migrationResult;
 };
 
 const calculateContractAddress = (nonce, target_address) => {
