@@ -138,19 +138,20 @@ const portContract = async (contract_address,
     
 
     // calculate how much the migration costs
-    const deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
-    const initContractInstance = new target_web3.eth.Contract([]);
-    const estimatedGas = await initContractInstance.deploy({ data: deploy_code }).estimateGas({
-        to: target_address,
-        gas: config.chain.gasLimit
-    });
-    console.log(`Estimated gas for migration: ${estimatedGas}`);
-
-    if ((estimatedGas * config.chain.gasBufferMultiplicator) <= config.chain.gasLimit) {
-        return await deployLogic(target_web3, target_address, deploy_code, config);
-    } else {
-        return await deployLargeContract(target_web3, target_address, contract_code, storage, config);
+    let roughEstimate = Object.keys(storage).length * config.chain.deployingStorageCost * config.chain.gasBufferMultiplicator;
+    console.log(`Estimated gas for deploying contract storage with the help of config.deployingStorageCost: ${roughEstimate}`);
+    if (roughEstimate <= config.chain.gasLimit) {
+        const deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
+        const logicContractInstance = new target_web3.eth.Contract([]);
+        const estimatedGas = await logicContractInstance.deploy({ data: deploy_code }).estimateGas({
+            to: target_address,
+            gas: config.chain.gasLimit
+        });
+        const bufferedEsimtatedGas = estimatedGas * config.chain.gasBufferMultiplicator;
+        console.log(`Estimated gas for migrating logic contract only: ${estimatedGas}, estimatedGas * gasBufferMultiplicator = ${bufferedEsimtatedGas} gasLimit: ${config.chain.gasLimit}`);
+        if (bufferedEsimtatedGas <= config.chain.gasLimit) return await deployLogic(target_web3, target_address, deploy_code, config);
     }
+    return await deployLargeContract(target_web3, target_address, contract_code, storage, config);
 };
 
 const deployLargeContract = async (web3, target_address, contract_code, contract_state, config) => {
@@ -175,7 +176,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
     let proxyAddress;
     console.log('--- Deploy Proxy ---');
     console.log('Proxy bytecode: ', proxyCode);
-    const proxyDeployed = await proxyContract.deploy({data: proxyCode}).send({
+    await proxyContract.deploy({data: proxyCode}).send({
         from: target_address,
         gas: config.chain.gasLimit,
         gasPrice: config.chain.gasPrice
@@ -233,28 +234,33 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
             process.exit();
         });
 
-    initInstance.options.address = initContractAddress;
-
     // Set storage
     console.log('Setting storage.');
     const storageKeys = Object.keys(contract_state);
-    let keysPerBatch = 2;
-    if (storageKeys.length > 2) {
-        const estimatedGasOneKeyValuePair = await initContract.methods.setValue([storageKeys[0]], [contract_state[storageKeys[0]]]).estimateGas({
+    // number of key value pairs migrated per batch
+    let keysPerBatch = 1;
+    // if there are more than 1 key value pairs to be processed, calculate maximized amount of pairs in one batch to optimize throughput capped by gasLimit
+    if (storageKeys.length > keysPerBatch) {
+        console.log('Calculating amount of key value pairs per batch');
+        const estimatedGasOneKeyValuePair = await initInstance.methods.setValue([`0x${storageKeys[0]}`], [`0x${contract_state[storageKeys[0]]}`]).estimateGas({
             to: target_address,
             gas: config.chain.gasLimit
         });
-        const estimatedGasTwoKeyValuePairs = await initContract.methods.setValue([storageKeys[0], storageKeys[1]], [contract_state[storageKeys[0]], contract_state[storageKeys[1]]]).estimateGas({
+        const estimatedGasTwoKeyValuePairs = await initInstance.methods.setValue([`0x${storageKeys[0]}`, `0x${storageKeys[1]}`], [`0x${contract_state[storageKeys[0]]}`, `0x${contract_state[storageKeys[1]]}`]).estimateGas({
             to: target_address,
             gas: config.chain.gasLimit
         });
         const gasCostPerKeyValuePair = estimatedGasTwoKeyValuePairs - estimatedGasOneKeyValuePair;
-        const bufferedGasLimit = config.chain.gasLimit / config.chain.gasBufferMultiplicator;
-        const keyValuePairGasLimit = bufferedGasLimit - estimatedGasOneKeyValuePair;
-        keysPerBatch = parseInt((keyValuePairGasLimit - (keyValuePairGasLimit % gasCostPerKeyValuePair)) / gasCostPerKeyValuePair);
+        const bufferedGasLimit = config.chain.gasLimit - config.chain.gasBuffer;
+        const administrativeGasCost = estimatedGasOneKeyValuePair - gasCostPerKeyValuePair;
+        const keyValuePairGasLimit = bufferedGasLimit - administrativeGasCost;
+        console.log(`Gas cost per migrated pair: ${gasCostPerKeyValuePair}, administrative gas cost: ${administrativeGasCost}, buffered gas limit for pairs per batch: ${keyValuePairGasLimit}`);
+        // if estimated gas cost for one pair exceeds gasLimit, try with one pair per transaction anyway
+        if (keyValuePairGasLimit < gasCostPerKeyValuePair) keysPerBatch = 1;
+        else keysPerBatch = parseInt(keyValuePairGasLimit / gasCostPerKeyValuePair);
     }
     
-    console.log(`Keys per batch: ${keysPerBatch}`);
+    console.log(`Keys per batch: ${keysPerBatch}, keys to process: ${storageKeys.length}`);
     let keys = [];
     let values = [];
     for (const key of storageKeys) {
@@ -293,6 +299,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
 };
 
 const setValuesOnInitContract = async (target_address, initContract, keys, values, config) => {
+    if (keys.length < 1) return;
     console.log('keys: ', keys);
     console.log('values: ', values);
     await initContract.methods.setValue(keys, values).send({

@@ -2,7 +2,9 @@
     "chain": {
         "gasLimit": 4700000,
         "gasPrice": "2000000000",
-        "gasBufferMultiplicator": 5
+        "gasBufferMultiplicator": 5,
+        "deployingStorageCost": 20000,
+        "gasBuffer": 100000
     },
     "contracts": {
         "proxyContractFilePath": "contracts/ProxyContract.json",
