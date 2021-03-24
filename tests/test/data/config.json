@@ -2,7 +2,6 @@
     "chain": {
         "gasLimit": 320000,
         "gasPrice": "2000000000",
-        "gasBufferMultiplicator": 5,
         "deployingStorageCost": 20000,
         "gasBuffer": 100000
     },
