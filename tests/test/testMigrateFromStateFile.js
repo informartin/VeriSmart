@@ -6,10 +6,11 @@ const fs = require('fs');
 
 const source_dsl = 'http://localhost:8545';
 const jsonFileName = 'test/data/testMigrateFromStateFile.json';
+const configFilePath = 'tests/test/data/config.json';
 
 contract('testMigrateFromState', (accounts) => {
     it('should migrate all values/references in state and code to other blockchain', async () => {
-        let migrateCommand = `./cli/index migrate --state_file tests/${jsonFileName} --target ${source_dsl} --address ${accounts[0]} --parity`;
+        let migrateCommand = `./cli/index migrate --state_file tests/${jsonFileName} --target ${source_dsl} --address ${accounts[0]} -k ${configFilePath} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
