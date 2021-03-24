@@ -117,7 +117,7 @@ const getState = async (contract_address,
     return contractState;
 };
 
-const extractContractFromJSONFile = async (jsonFileName) => {
+const readFromJSONFile = async (jsonFileName) => {
     console.log('Extracting data from json file...');
     if (jsonFileName === undefined) return undefined;
     const readStream = fs.createReadStream(jsonFileName);
@@ -213,5 +213,5 @@ const getStaticReferences = async (
 
 module.exports.getState = getState;
 module.exports.writeToJson = writeToJson;
-module.exports.extractContractFromJSONFile = extractContractFromJSONFile;
+module.exports.readFromJSONFile = readFromJSONFile;
 module.exports.getStaticReferences = getStaticReferences;

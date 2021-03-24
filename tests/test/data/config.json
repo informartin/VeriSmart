@@ -1,0 +1,15 @@
+{
+    "chain": {
+        "gasLimit": 320000,
+        "gasPrice": "2000000000",
+        "deployingStorageCost": 20000,
+        "gasBuffer": 100000
+    },
+    "contracts": {
+        "proxyContractFilePath": "contracts/ProxyContract.json",
+        "initContractFilePath":"contracts/InitContract.json"
+    },
+    "migration": {
+        "interruptedMigrationFilePath": "tests/test/data/interrupted-migration.json"
+    }
+}

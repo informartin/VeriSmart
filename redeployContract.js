@@ -19,6 +19,7 @@ const portContract = async (contract_address,
                         max_depth,
                         block_number,
                         stateJson,
+                        config,
                         targetFile
                     }) => {
 
@@ -58,6 +59,7 @@ const portContract = async (contract_address,
                                 stateJson,
                                 max_depth,
                                 block_number,
+                                config,
                                 targetFile: undefined
                         });
                         const contractAddress = address.substring(2);
@@ -89,6 +91,7 @@ const portContract = async (contract_address,
                             fat_db,
                             max_depth,
                             block_number,
+                            config,
                             targetFile: undefined,
                             stateJson: stateReference
                     });
@@ -113,7 +116,6 @@ const portContract = async (contract_address,
             referencedContracts = stateJson['static_references'];
         }
         
-    
         for (const contract of referencedContracts) {
             console.log('--- Reference found in bytecode, migrating: ', contract['contract_address'], ' ---');
             const contractAddress = await portContract(contract['contract_address'], source_rpc, target_rpc, target_address, code_size, 
@@ -124,6 +126,7 @@ const portContract = async (contract_address,
                     fat_db,
                     max_depth,
                     block_number,
+                    config,
                     stateJson: stateJson ? contract : undefined,
                     targetFile: undefined
             });
@@ -134,27 +137,35 @@ const portContract = async (contract_address,
     }
     
 
-    // TODO: Clean up this mess
-    let deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
-    // TODO: Should calculate proper gas requirement for executing code
-    console.log('Length', deploy_code.length);
-    if (deploy_code.length < code_size) {
-        return await deployLogic(target_web3, target_address, deploy_code);
-    } else {
-        return await deployLargeContract(target_web3, target_address, contract_code, storage);
+    // calculate how much the migration costs
+    let roughEstimate = Object.keys(storage).length * config.chain.deployingStorageCost + config.chain.gasBuffer;
+    console.log(`Estimated gas for deploying contract storage with the help of config.deployingStorageCost: ${roughEstimate}`);
+    if (roughEstimate <= config.chain.gasLimit) {
+        const deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
+        const logicContractInstance = new target_web3.eth.Contract([], undefined, {
+            from: target_address,
+            data: deploy_code,
+            gas: config.chain.gasLimit,
+            gasPrice: config.chain.gasPrice
+        });
+        const estimatedGas = await logicContractInstance.deploy().estimateGas();
+        const bufferedEsimtatedGas = estimatedGas + config.chain.gasBuffer;
+        console.log(`Estimated gas for migrating logic contract only: ${estimatedGas}, estimatedGas + gasBuffer = ${bufferedEsimtatedGas}, gasLimit: ${config.chain.gasLimit}`);
+        if (bufferedEsimtatedGas <= config.chain.gasLimit) return await deployLogic(target_web3, target_address, deploy_code, config);
     }
+    return await deployLargeContract(target_web3, target_address, contract_code, storage, config);
 };
 
-const deployLargeContract = async (web3, target_address, contract_code, contract_state) => {
+const deployLargeContract = async (web3, target_address, contract_code, contract_state, config) => {
     //
     // Deploy Logic Contract
     //
     const deploy_code = "0x" + createB.createBytecode(contract_code, {});
-    const logicContractAddress = await deployLogic(web3, target_address, deploy_code);
+    const logicContractAddress = await deployLogic(web3, target_address, deploy_code, config);
     //
     // Deploy ProxyContract
     //
-    const proxyJsonRaw = fs.readFileSync("./contracts/ProxyContract.json");
+    const proxyJsonRaw = fs.readFileSync(config.contracts.proxyContractFilePath);
     const proxyJson = JSON.parse(proxyJsonRaw);
     let proxyCode = proxyJson.bytecode;
     // Replace placeholder address with logic contract address
@@ -167,10 +178,10 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
     let proxyAddress;
     console.log('--- Deploy Proxy ---');
     console.log('Proxy bytecode: ', proxyCode);
-    const proxyDeployed = await proxyContract.deploy({data: proxyCode}).send({
+    await proxyContract.deploy({data: proxyCode}).send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error: ', error)
@@ -181,13 +192,19 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         .on('receipt', function (receipt) {
             proxyAddress = receipt.contractAddress;
             console.log('Proxy Contract: ', receipt.contractAddress); // contains the new contract address
+            console.log(`Actual gas used: ${receipt.gasUsed}`);
             return receipt;
-        });
+        })
+        .catch(error => {
+            // todo change process.exit() to a soft exit (see issue #19)
+            console.log(error);
+            process.exit();
+        });;
 
     //
     // Deploy Initialization Contract
     //
-    const initJsonRaw = fs.readFileSync("./contracts/InitContract.json");
+    const initJsonRaw = fs.readFileSync(config.contracts.initContractFilePath);
     const initJson = JSON.parse(initJsonRaw);
     let initCode = initJson.bytecode;
     let initAbi = initJson.abi;
@@ -199,8 +216,8 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
     let initContractAddress;
     const initInstance = await initContract.deploy({data: initCode}).send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error: ', error)
@@ -211,31 +228,59 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         .on('receipt', function (receipt) {
             initContractAddress = receipt.contractAddress;
             console.log('Init address: ', receipt.contractAddress); // contains the new contract address
+            console.log(`Actual gas used: ${receipt.gasUsed}`);
             return receipt;
+        })
+        .catch(error => {
+            console.log(error);
+            process.exit();
         });
 
-    initInstance.options.address = initContractAddress;
     // Set storage
+    console.log('Setting storage.');
     const storageKeys = Object.keys(contract_state);
+    // number of key value pairs migrated per batch
+    let keysPerBatch = 1;
+    // if there are more than 1 key value pairs to be processed, calculate maximized amount of pairs in one batch to optimize throughput capped by gasLimit
+    if (storageKeys.length > keysPerBatch) {
+        console.log('Calculating amount of key value pairs per batch');
+        const estimatedGasOneKeyValuePair = await initInstance.methods.setValue([`0x${storageKeys[0]}`], [`0x${contract_state[storageKeys[0]]}`]).estimateGas({
+            from: target_address,
+            gas: config.chain.gasLimit
+        });
+        const estimatedGasTwoKeyValuePairs = await initInstance.methods.setValue([`0x${storageKeys[0]}`, `0x${storageKeys[1]}`], [`0x${contract_state[storageKeys[0]]}`, `0x${contract_state[storageKeys[1]]}`]).estimateGas({
+            from: target_address,
+            gas: config.chain.gasLimit
+        });
+        const gasCostPerKeyValuePair = estimatedGasTwoKeyValuePairs - estimatedGasOneKeyValuePair;
+        const bufferedGasLimit = config.chain.gasLimit - config.chain.gasBuffer;
+        const administrativeGasCost = estimatedGasOneKeyValuePair - gasCostPerKeyValuePair;
+        const keyValuePairGasLimit = bufferedGasLimit - administrativeGasCost;
+        console.log(`Gas cost per migrated pair: ${gasCostPerKeyValuePair}, administrative gas cost: ${administrativeGasCost}, buffered gas limit for pairs per batch: ${keyValuePairGasLimit}`);
+        // if estimated gas cost for one pair exceeds gasLimit, try with one pair per transaction anyway
+        if (keyValuePairGasLimit < gasCostPerKeyValuePair) keysPerBatch = 1;
+        else keysPerBatch = parseInt(keyValuePairGasLimit / gasCostPerKeyValuePair);
+    }
+    
+    console.log(`Keys per batch: ${keysPerBatch}, keys to process: ${storageKeys.length}`);
     let keys = [];
     let values = [];
-    for(let i = 0; i < storageKeys.length; i++) {
-        const key  = storageKeys[i];
-        keys.push('0x' + key);
-        values.push('0x' + contract_state[key]);
-        if(((i+1) % 40) == 0) {
-            await setValuesOnInitContract(target_address, initInstance, keys, values);
+    for (const key of storageKeys) {
+        keys.push(`0x${key}`);
+        values.push(`0x${contract_state[key]}`);
+        if(((keys.length) % keysPerBatch) == 0) {
+            await setValuesOnInitContract(target_address, initInstance, keys, values, config);
             keys = [];
             values = [];
         }
     }
-    await setValuesOnInitContract(target_address, initInstance, keys, values);
+    await setValuesOnInitContract(target_address, initInstance, keys, values, config);
 
     // selfdestruct initContract
     await initInstance.methods.close().send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error while trying to destruct initContract: ', error)
@@ -250,17 +295,20 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         })
         .catch((error) => {
             console.log('Error while trying to destruct initContract: ', error);
+            // TODO hier dann interrupted-migration einfuegen!
+            process.exit();
         });
     return proxyAddress;
 };
 
-const setValuesOnInitContract = async (target_address, initContract, keys, values) => {
+const setValuesOnInitContract = async (target_address, initContract, keys, values, config) => {
+    if (keys.length < 1) return;
     console.log('keys: ', keys);
     console.log('values: ', values);
     await initContract.methods.setValue(keys, values).send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error: ', error)
@@ -270,20 +318,24 @@ const setValuesOnInitContract = async (target_address, initContract, keys, value
         })
         .on('receipt', function (receipt) {
             console.log('Added storage values'); // contains the new contract address
-            console.log('Receipt: ', receipt);
+            console.log(`Actual gas used: ${receipt.gasUsed}`);
             return receipt;
+        })
+        .catch(error => {
+            console.log(error);
+            process.exit();
         });
 };
 
-const deployLogic = async (web3, target_address, deploy_code) => {
+const deployLogic = async (web3, target_address, deploy_code, config) => {
     console.log('--- Deploy Logic ---');
     console.log('Deploy code: ', deploy_code);
     let myContract = new web3.eth.Contract([]);
     let contractAddress;
     await myContract.deploy({data: deploy_code}).send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error: ', error)
@@ -294,6 +346,11 @@ const deployLogic = async (web3, target_address, deploy_code) => {
         .on('receipt', function (receipt) {
             contractAddress = receipt.contractAddress;
             console.log('Logic Contract: ', contractAddress); // contains the new contract address
+            console.log(`Actual gas used: ${receipt.gasUsed}`);
+        })
+        .catch((error) => {
+            console.log(error);
+            contractAddress = undefined;
         });
     return contractAddress;
 };
