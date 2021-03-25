@@ -1,6 +1,5 @@
 const transactionsFunc = require('./getTransactions.js');
 const request = require('request-promise-native');
-const replayCsv = require('./replayCsv');
 const contractHelper = require('./contractHelper');
 
 const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, fat_db, block_number, targetFile}) => {
@@ -34,9 +33,7 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
         
         console.log('Transactions Received: ', transactions);
         const rpc = web3.currentProvider.host;
-        //let storage = await replayCsv.getState(rpc, node, contract_address, csv_path);
-        //let storage = await replayCsv.replayTransaction(transactions, rpc, node);
-        storage = await replayCsv.getState(transactions, node, rpc, contract_address);
+        storage = await contractHelper.getStateFromTransactions(transactions, node, rpc, contract_address);
             
     }
 
@@ -46,9 +43,6 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
 };
 
 const getStorageFromParityFatDB = async (contract_address, web3, result_limit, block_number) => {
-    /**
-     * TODO Permit passing value via CLI
-     */
     let limit = result_limit;
 
     console.log(`Retrieving state from Parity fat-db with limit ${result_limit}`);
@@ -76,32 +70,4 @@ const getStorageFromParityFatDB = async (contract_address, web3, result_limit, b
     return storage;
 };
 
-
-const replayTransactions = async (transactions, rpc) => {
-    let storage = {};
-    for(const transaction of transactions) {
-        await request.post({
-            url: rpc,
-            method: "POST",
-            json: true,
-            body: {"jsonrpc":"2.0", "method":"debug_traceTransaction", "params":[transaction, {}], "id":1}
-        }, function (error, response, body){
-            if (!error && response.statusCode == 200) {
-                const txStorage = body.result.structLogs[body.result.structLogs.length-1].storage;
-                const keys = Object.keys(txStorage);
-                keys.forEach(key => {
-                    if(txStorage[key] === '0x0000000000000000000000000000000000000000000000000000000000000000')
-                        delete storage[key];
-                    else
-                        storage[key] = txStorage[key]
-                });
-            } else {
-                error.log('ERROR: ', error);
-            }
-        });
-    }
-    return storage;
-};
-
 module.exports.getContract = getContract;
-module.exports.replayTransactions = replayTransactions;

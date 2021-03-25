@@ -24,13 +24,13 @@ const isStateEqual = async (
     // get deployment block of init block if no block was specified
     let true_target_block;
     if (target_block === undefined) {
-        const initContractAddress = await getInitContractAddress(target_contract_address, web3_target_rpc);
-        true_target_block = initContractAddress === undefined ? await findDeploymentBlock(target_contract_address, web3_target_rpc) : await findDeploymentBlockProxyContract(initContractAddress, web3_target_rpc);
+        const initContractAddress = await contractHelper.getInitContractAddress(target_contract_address, web3_target_rpc);
+        true_target_block = initContractAddress === undefined ? await contractHelper.findDeploymentBlock(target_contract_address, web3_target_rpc) : await contractHelper.findDeploymentBlockProxyContract(initContractAddress, web3_target_rpc);
     } else {
         true_target_block = target_block;
     }
 
-    let logic_contract_address = await getLogicContractAddress(target_contract_address, web3_target_rpc);
+    let logic_contract_address = await contractHelper.getLogicContractAddress(target_contract_address, web3_target_rpc);
     if (logic_contract_address === undefined) logic_contract_address = target_contract_address;
 
     if ((await web3_source_rpc.eth.getCode(source_contract_address, true_source_block)).length < 4) {
@@ -110,12 +110,12 @@ const isStateOfReferencingContractsEqual= async (
     if (source_contract_proof.storageHash !== target_contract_proof.storageHash) {
         console.log('StorageHashes are different.');
         // 1.1 check if possible state references to other contracts are the same
-        const [source_contract_references_object, source_contract_references] = await getReferences(source_contract, source_rpc);
+        const [source_contract_references_object, source_contract_references] = await contractHelper.getReferences(source_contract, source_rpc);
         if (source_contract_references.length < 1) return false;
         console.log('Source contract references to other contracts:');
         console.log(source_contract_references);
 
-        const [target_contract_references_object, target_contract_references] = await getReferences(target_contract, target_rpc);
+        const [target_contract_references_object, target_contract_references] = await contractHelper.getReferences(target_contract, target_rpc);
         if (source_contract_references.length !== target_contract_references.length) return false;
         console.log('Target contract references to other contracts:');
         console.log(target_contract_references);
@@ -162,7 +162,7 @@ const isStateOfReferencingContractsEqual= async (
 
         // 1.2 check if other state values are the same
         console.log('Comparing non-references values in contracts');
-        const source_contract_values = getContractValues(source_contract, web3_source_rpc);
+        const source_contract_values = contractHelper.getContractValues(source_contract, web3_source_rpc);
 
         for (let [index, paddedValue] of Object.entries(source_contract_values)) {
             // getting the value at right time (getContract gets the contract at the latest block)
@@ -206,7 +206,7 @@ const isStateOfReferencingContractsEqual= async (
         for (const i in source_contract_static_references) {
             const source_reference = source_contract_static_references[i];
             const target_reference = target_contract_static_references[i];
-            let logic_contract_reference_address = await getLogicContractAddress(target_reference, web3_target_rpc);
+            let logic_contract_reference_address = await contractHelper.getLogicContractAddress(target_reference, web3_target_rpc);
             if (logic_contract_reference_address === undefined) logic_contract_reference_address = target_reference;
 
             // check if referenced contracts are the same (and without references)
@@ -251,139 +251,6 @@ const isStateOfReferencingContractsEqual= async (
     }
 
     return true;
-};
-
-const getReferences = async (
-    contract, rpc
-) => {
-    const web3_rpc = new Web3(rpc);
-    let storage = contract.storage;
-    let referenced_contract_addresses = {};
-    let referenced_contract_addresses_values = [];
-
-    // getting all referenced contract addresses in state
-    for (let [index, paddedValue] of Object.entries(storage)) {
-        // remove leading zeros
-        const value = paddedValue.replace(/^0+/, '');
-        if (web3_rpc.utils.isAddress(value)) {
-            console.log(`Address found in storage: ${value}`);
-
-            const code = await web3_rpc.eth.getCode(value);
-
-            if (code.length > 3) {
-                referenced_contract_addresses[index] = paddedValue;
-                referenced_contract_addresses_values.push(value);
-            }
-        }
-    }
-
-    return [referenced_contract_addresses, referenced_contract_addresses_values];
-};
-
-const getContractValues = async (contract, web3_rpc) => {
-    let storage = contract.storage;
-    let values = {};
-
-    // getting all contract values in state excluding contract addresses
-    for (let [index, paddedValue] of Object.entries(storage)) {
-        // remove leading zeros
-        const value = paddedValue.replace(/^0+/, '');
-        if (!web3_rpc.utils.isAddress(value) || (await web3_rpc.eth.getCode(value)).length < 4) {
-            values[index] = paddedValue;
-        }
-    }
-    return values;
-}
-
-// binary search for block where contract was deployed
-const findDeploymentBlock = async (contract_address, web3) => {
-    let low = 0;
-    let high = (await web3.eth.getBlock('latest')).number;
-
-    let mid;
-    while (low <= high) {
-        mid = parseInt((low + high) / 2);
-
-        curr_code = await web3.eth.getCode(contract_address, mid);
-        // return mid if the smart contract was deployed on that block (previousBlock.getCode(smartContract) === none)
-        if (curr_code.length > 3 && (mid === 0 || (await web3.eth.getCode(contract_address, mid - 1)).length < 4) ) return mid;
-        
-        else if (curr_code.length > 3) high = mid - 1;
-        
-        else low = mid + 1;
-    }
-
-    return -1;
-};
-
-const getInitContractAddress = async (proxy_contract_address, web3) => {
-    console.log('Trying to find initContractAddress...');
-    const localProxyContractCode = JSON.parse(fs.readFileSync('contracts/ProxyContract.json', 'utf-8'));
-    const proxy_contract_code = await web3.eth.getCode(proxy_contract_address);
-    if (proxy_contract_code.length < 4) {
-        console.log('Given proxy_contract_address is not the address of a smart contract.');
-        process.exit(9);
-    }
-
-    const prefixRegex = RegExp('(0x[\\w\\d]+)[2]{40}([\\w\\d]+)[8]{40}[\\w\\d]+');
-    const prefixByteCode = prefixRegex.exec(localProxyContractCode['deployedBytecode']);
-    if (proxy_contract_code.search(prefixByteCode[1]) === -1) {
-        console.log('Could not find proxy contract byte code. Maybe only logic contract was needed.');
-        return undefined;
-    }
-    const initContractRegex = RegExp(`${prefixByteCode[1]}[\\w\\d]+${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`);
-    
-    const regexResult = initContractRegex.exec(proxy_contract_code);
-
-    if (regexResult === null) {
-        console.log('Could not extract initContractAddress..');
-        console.log(`Local Deployed Proxy Contract Code: ${localProxyContractCode['deployedBytecode']}`);
-        console.log(`Deployed Contract Code: ${proxy_contract_code}`);
-        process.exit(9);
-    }
-
-    console.log(`initContractAddress = ${regexResult[1]}`);
-
-    return regexResult[1];
-};
-
-const getLogicContractAddress = async (proxy_contract_address, web3) => {
-    console.log('Trying to find logicContractAddress...');
-    const localProxyContractCode = JSON.parse(fs.readFileSync('contracts/ProxyContract.json', 'utf-8'));
-    const proxy_contract_code = await web3.eth.getCode(proxy_contract_address);
-    if (proxy_contract_code.length < 4) {
-        console.log('Given proxy_contract_address is not the address of a smart contract.');
-        process.exit(9);
-    }
-
-    const prefixRegex = RegExp('(0x[\\w\\d]+)[2]{40}([\\w\\d]+)[8]{40}[\\w\\d]+');
-    const prefixByteCode = prefixRegex.exec(localProxyContractCode['deployedBytecode']);
-    if (proxy_contract_code.search(prefixByteCode[1]) === -1) {
-        console.log('Could not find proxy contract byte code. Maybe provided contract address is logic address.');
-        return undefined;
-    }
-    const initContractRegex = RegExp(`${prefixByteCode[1]}([\\w\\d]{40})${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`);
-    
-    const regexResult = initContractRegex.exec(proxy_contract_code);
-
-    if (regexResult === null) {
-        console.log('Could not extract logicContractAddress..');
-        console.log(`Local Deployed Proxy Contract Code: ${localProxyContractCode['deployedBytecode']}`);
-        console.log(`Deployed Contract Code: ${proxy_contract_code}`);
-        process.exit(9);
-    }
-
-    console.log(`logicContractAddress = ${regexResult[1]}`);
-
-    return regexResult[1];
-}
-
-const findDeploymentBlockProxyContract = async (initContractAddress, web3) => {
-    const localInitContractCode = JSON.parse(fs.readFileSync('contracts/InitContract.json', 'utf-8'));
-
-    const deployedInitContract = new web3.eth.Contract(localInitContractCode['abi'], initContractAddress);
-    const pastEvents = await deployedInitContract.getPastEvents('Status');
-    return pastEvents[0]['blockNumber'];
 };
 
 module.exports.isStateEqual = isStateEqual;

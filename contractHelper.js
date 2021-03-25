@@ -3,6 +3,7 @@ const contractFunc = require('./getContract.js');
 const fs = require("fs");
 const BigJson = require('big-json');
 const { EVM } = require('evm');
+const request = require('request-promise-native');
 
 const getState = async (contract_address,
                         source_web3,
@@ -117,6 +118,26 @@ const getState = async (contract_address,
     return contractState;
 };
 
+const getStateFromTransactions = async (transactions, node, rpc, contract_address) => {
+    let storage = {};
+    let i = 0;
+    for (const tx of transactions) {
+        const response = await replayTransaction(tx, node, rpc, contract_address,i++);
+        if(response) {
+            const txStorage = response[tx];
+            console.log('txStorage: ', txStorage);
+            const keys = Object.keys(txStorage);
+            keys.forEach(key => {
+                if(txStorage[key] === '0x0000000000000000000000000000000000000000000000000000000000000000')
+                    delete storage[key.substring(2)];
+                else
+                    storage[key.substring(2)] = txStorage[key].substring(2);
+            });
+        }
+    }
+    return storage;
+};
+
 const readFromJSONFile = async (jsonFileName) => {
     console.log('Extracting data from json file...');
     if (jsonFileName === undefined) return undefined;
@@ -211,7 +232,223 @@ const getStaticReferences = async (
     return referencedContracts;
 };
 
+const getReferences = async (contract, rpc) => {
+    const web3_rpc = new Web3(rpc);
+    let storage = contract.storage;
+    let referenced_contract_addresses = {};
+    let referenced_contract_addresses_values = [];
+
+    // getting all referenced contract addresses in state
+    for (let [index, paddedValue] of Object.entries(storage)) {
+        // remove leading zeros
+        const value = paddedValue.replace(/^0+/, '');
+        if (web3_rpc.utils.isAddress(value)) {
+            console.log(`Address found in storage: ${value}`);
+
+            const code = await web3_rpc.eth.getCode(value);
+
+            if (code.length > 3) {
+                referenced_contract_addresses[index] = paddedValue;
+                referenced_contract_addresses_values.push(value);
+            }
+        }
+    }
+
+    return [referenced_contract_addresses, referenced_contract_addresses_values];
+};
+
+const getContractValues = async (contract, web3_rpc) => {
+    let storage = contract.storage;
+    let values = {};
+
+    // getting all contract values in state excluding contract addresses
+    for (let [index, paddedValue] of Object.entries(storage)) {
+        // remove leading zeros
+        const value = paddedValue.replace(/^0+/, '');
+        if (!web3_rpc.utils.isAddress(value) || (await web3_rpc.eth.getCode(value)).length < 4) {
+            values[index] = paddedValue;
+        }
+    }
+    return values;
+}
+
+// binary search for block where contract was deployed
+const findDeploymentBlock = async (contract_address, web3) => {
+    let low = 0;
+    let high = (await web3.eth.getBlock('latest')).number;
+
+    let mid;
+    while (low <= high) {
+        mid = parseInt((low + high) / 2);
+
+        curr_code = await web3.eth.getCode(contract_address, mid);
+        // return mid if the smart contract was deployed on that block (previousBlock.getCode(smartContract) === none)
+        if (curr_code.length > 3 && (mid === 0 || (await web3.eth.getCode(contract_address, mid - 1)).length < 4) ) return mid;
+        
+        else if (curr_code.length > 3) high = mid - 1;
+        
+        else low = mid + 1;
+    }
+
+    return -1;
+};
+
+const getInitContractAddress = async (proxy_contract_address, web3) => {
+    console.log('Trying to find initContractAddress...');
+    const localProxyContractCode = JSON.parse(fs.readFileSync('contracts/ProxyContract.json', 'utf-8'));
+    const proxy_contract_code = await web3.eth.getCode(proxy_contract_address);
+    if (proxy_contract_code.length < 4) {
+        console.log('Given proxy_contract_address is not the address of a smart contract.');
+        process.exit(9);
+    }
+
+    const prefixRegex = RegExp('(0x[\\w\\d]+)[2]{40}([\\w\\d]+)[8]{40}[\\w\\d]+');
+    const prefixByteCode = prefixRegex.exec(localProxyContractCode['deployedBytecode']);
+    if (proxy_contract_code.search(prefixByteCode[1]) === -1) {
+        console.log('Could not find proxy contract byte code. Maybe only logic contract was needed.');
+        return undefined;
+    }
+    const initContractRegex = RegExp(`${prefixByteCode[1]}[\\w\\d]+${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`);
+    
+    const regexResult = initContractRegex.exec(proxy_contract_code);
+
+    if (regexResult === null) {
+        console.log('Could not extract initContractAddress..');
+        console.log(`Local Deployed Proxy Contract Code: ${localProxyContractCode['deployedBytecode']}`);
+        console.log(`Deployed Contract Code: ${proxy_contract_code}`);
+        process.exit(9);
+    }
+
+    console.log(`initContractAddress = ${regexResult[1]}`);
+
+    return regexResult[1];
+};
+
+const getLogicContractAddress = async (proxy_contract_address, web3) => {
+    console.log('Trying to find logicContractAddress...');
+    const localProxyContractCode = JSON.parse(fs.readFileSync('contracts/ProxyContract.json', 'utf-8'));
+    const proxy_contract_code = await web3.eth.getCode(proxy_contract_address);
+    if (proxy_contract_code.length < 4) {
+        console.log('Given proxy_contract_address is not the address of a smart contract.');
+        process.exit(9);
+    }
+
+    const prefixRegex = RegExp('(0x[\\w\\d]+)[2]{40}([\\w\\d]+)[8]{40}[\\w\\d]+');
+    const prefixByteCode = prefixRegex.exec(localProxyContractCode['deployedBytecode']);
+    if (proxy_contract_code.search(prefixByteCode[1]) === -1) {
+        console.log('Could not find proxy contract byte code. Maybe provided contract address is logic address.');
+        return undefined;
+    }
+    const initContractRegex = RegExp(`${prefixByteCode[1]}([\\w\\d]{40})${prefixByteCode[2]}([\\w\\d]{40})[\\w\\d]+`);
+    
+    const regexResult = initContractRegex.exec(proxy_contract_code);
+
+    if (regexResult === null) {
+        console.log('Could not extract logicContractAddress..');
+        console.log(`Local Deployed Proxy Contract Code: ${localProxyContractCode['deployedBytecode']}`);
+        console.log(`Deployed Contract Code: ${proxy_contract_code}`);
+        process.exit(9);
+    }
+
+    console.log(`logicContractAddress = ${regexResult[1]}`);
+
+    return regexResult[1];
+}
+
+const findDeploymentBlockProxyContract = async (initContractAddress, web3) => {
+    const localInitContractCode = JSON.parse(fs.readFileSync('contracts/InitContract.json', 'utf-8'));
+
+    const deployedInitContract = new web3.eth.Contract(localInitContractCode['abi'], initContractAddress);
+    const pastEvents = await deployedInitContract.getPastEvents('Status');
+    return pastEvents[0]['blockNumber'];
+};
+
+const replayTransaction = async (transaction, node, rpc, contract_address, id) => {
+    if((id % 100) == 0)
+        console.log(id);
+    let options;
+    switch(node) {
+        case 'geth':
+            options = {
+                url: rpc,
+                method: "POST",
+                json: true,
+                body: {
+                    "jsonrpc":"2.0",
+                    "method":"debug_traceTransaction",
+                    "params":[transaction, {}],
+                    "id":1
+                }
+            };
+            break;
+        case 'parity':
+            options = {
+                url: rpc,
+                method: "POST",
+                json: true,
+                body: {
+                    "jsonrpc": "2.0",
+                    "method": "trace_replayTransaction",
+                    "params": [transaction, ["stateDiff"]],
+                    "id": 1
+                }
+            };
+            break;
+    }
+
+    try {
+        const body = await request(options);
+        if (node === 'parity') {
+            // Ensure the state has been changed
+            if (body.result.stateDiff.hasOwnProperty(contract_address.toLowerCase())) {
+                const tx = body.result.stateDiff[contract_address.toLowerCase()];
+                console.log('tx: ', transaction);
+                if (tx) {
+                    const txStorage = tx.storage;
+                    const keys = Object.keys(txStorage);
+                    let obj = {};
+                    keys.forEach(key => {
+                        // First case: normal tx
+                        // Second case: deploying tx
+                        if(txStorage[key].hasOwnProperty('*'))
+                            obj[key] = txStorage[key]['*']['to'];
+                        else
+                            obj[key] = txStorage[key]['+']
+                    });
+                    let result = {};
+                    result[transaction] = obj;
+                    return result;
+                    //keys.forEach(key => state[key] = txStorage[key]['*']['to']);
+                }
+            }
+        }
+        else if (node === 'geth') {
+            console.log(`function replayTransaction (geth node): ${JSON.stringify(body)}`);
+            const txStorage = body.result.structLogs[body.result.structLogs.length - 1].storage;
+            const keys = Object.keys(txStorage);
+            let obj = {};
+            keys.forEach(key => {
+                obj[key] = txStorage[key];
+            });
+            let result = {};
+            result[transaction] = obj;
+            return result;
+            //keys.forEach(key => state[key] = txStorage[key]);
+        }
+        console.log(id, ' closed');
+    } catch(err) {
+        console.log(err);
+    }
+};
+
 module.exports.getState = getState;
 module.exports.writeToJson = writeToJson;
 module.exports.readFromJSONFile = readFromJSONFile;
 module.exports.getStaticReferences = getStaticReferences;
+module.exports.getReferences = getReferences;
+module.exports.getContractValues = getContractValues;
+module.exports.findDeploymentBlockProxyContract = findDeploymentBlockProxyContract;
+module.exports.getLogicContractAddress = getLogicContractAddress;
+module.exports.getInitContractAddress = getInitContractAddress;
+module.exports.findDeploymentBlock = findDeploymentBlock;
+module.exports.getStateFromTransactions = getStateFromTransactions;

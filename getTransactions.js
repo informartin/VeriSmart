@@ -54,26 +54,5 @@ module.exports = {
             })
         }
         return relatedTransactions;
-    },
-
-    getTransactionsFromCSV: async (csv_path) => {
-        console.log('--- Using CSV transaction retrieval ---');
-        const file = fs.createReadStream(csv_path);
-        let relatedTransactions = [];
-        console.log('Parsing file: ', csv_path);
-        await new Promise((resolve,reject) => Papa.parse(file, {
-            header: true,
-            step: function(row) {
-                //console.log('Result: ', row.data[0].transactionHash);
-                //console.log('Adding Transaction: ', row.data['transactionHash']);
-                relatedTransactions.push(row.data[0].transactionHash);
-            },
-            complete: function(results, file) {
-                console.log("Parsing complete");
-                resolve();
-            }
-        }));
-        //console.log(relatedTransactions);
-        return relatedTransactions;
     }
 };
