@@ -1,6 +1,3 @@
-const Papa = require("papaparse");
-const fs = require('fs');
-
 module.exports = {
     getTransactions: async (address, block_number, web3) => {
         console.log('Called getTransactions');
