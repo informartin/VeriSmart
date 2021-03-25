@@ -5,6 +5,7 @@ const Web3 = require('web3');
 const source_dsl = 'http://localhost:8545';
 const target_dsl = 'http://localhost:8540';
 const continueMigrationFile = 'test/data/interruptedMigration.json';
+const configFilePath = 'tests/test/data/config.json';
 
 contract('SimpleStorage', (accounts) => {
     it('should migrate simple contract to new address.', async () => {
@@ -12,7 +13,7 @@ contract('SimpleStorage', (accounts) => {
         const source_b = await simpleStorageInstance.getB.call();
         
         // start migration process
-        const migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} -i ./tests/${continueMigrationFile} --address ${accounts[0]} --parity`;
+        const migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} -k ${configFilePath} -i ./tests/${continueMigrationFile} --address ${accounts[0]} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());

@@ -21,6 +21,7 @@ const portContract = async (contract_address,
                                 stateJson,
                                 migratedContracts,
                                 continue_migration_file,
+                                config,
                                 targetFile
                             }
     ) => {
@@ -91,6 +92,7 @@ const portContract = async (contract_address,
                                 max_depth,
                                 block_number,
                                 migratedContracts: migratedContractsOfReference,
+                                config,
                                 targetFile: undefined
                         });
                         interruptedMigration.stateReferences[index] = migrationResult;
@@ -142,6 +144,7 @@ const portContract = async (contract_address,
                             fat_db,
                             max_depth,
                             block_number,
+                            config,
                             targetFile: undefined,
                             migratedContracts: migratedContractsOfReference,
                             stateJson: stateReference
@@ -177,7 +180,6 @@ const portContract = async (contract_address,
             referencedContracts = stateJson['static_references'];
         }
         
-    
         for (const contract of referencedContracts) {
             console.log('--- Reference found in bytecode, migrating: ', contract['contract_address'], ' ---');
             const migratedContractsOfReference = interruptedMigration.staticReferences[contract['contract_address']] !== undefined ? interruptedMigration.staticReferences[contract['contract_address']] : {
@@ -198,6 +200,7 @@ const portContract = async (contract_address,
                     fat_db,
                     max_depth,
                     block_number,
+                    config,
                     stateJson: stateJson ? contract : undefined,
                     migratedContracts: migratedContractsOfReference,
                     targetFile: undefined
@@ -217,28 +220,37 @@ const portContract = async (contract_address,
         }
     }
     
-
-    // TODO: Clean up this mess
-    let deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
-    // TODO: Should calculate proper gas requirement for executing code
-    console.log('Length', deploy_code.length);
+    // calculate how much the migration costs
+    let roughEstimate = Object.keys(storage).length * config.chain.deployingStorageCost + config.chain.gasBuffer;
+    console.log(`Estimated gas for deploying contract storage with the help of config.deployingStorageCost: ${roughEstimate}`);
     let migrationResult;
-    if (deploy_code.length < code_size) {
-        migrationResult = await deployLogic(target_web3, target_address, deploy_code, interruptedMigration);
+    if (roughEstimate <= config.chain.gasLimit) {
+        const deploy_code = `0x${createB.createBytecode(contract_code, storage)}`;
+        const logicContractInstance = new target_web3.eth.Contract([], undefined, {
+            from: target_address,
+            data: deploy_code,
+            gas: config.chain.gasLimit,
+            gasPrice: config.chain.gasPrice
+        });
+        const estimatedGas = await logicContractInstance.deploy().estimateGas();
+        const bufferedEsimtatedGas = estimatedGas + config.chain.gasBuffer;
+        console.log(`Estimated gas for migrating logic contract only: ${estimatedGas}, estimatedGas + gasBuffer = ${bufferedEsimtatedGas}, gasLimit: ${config.chain.gasLimit}`);
+        if (bufferedEsimtatedGas <= config.chain.gasLimit) migrationResult = await deployLogic(target_web3, target_address, deploy_code, config, interruptedMigration);
     } else {
-        migrationResult = await deployLargeContract(target_web3, target_address, contract_code, storage, interruptedMigration);
+        migrationResult = await deployLargeContract(target_web3, target_address, contract_code, storage, config, interruptedMigration);
     }
+
     // only write to file if not called recursively
     if (migratedContracts === undefined) await contractHelper.writeToJson(migrationResult, migratedContractsFile);
     return migrationResult;
 };
 
-const deployLargeContract = async (web3, target_address, contract_code, contract_state, interruptedMigration) => {
+const deployLargeContract = async (web3, target_address, contract_code, contract_state, config, interruptedMigration) => {
     //
     // Deploy Logic Contract
     //
-    const deploy_code = "0x" + createB.createBytecode(contract_code, {});
-    const migrationResult = await deployLogic(web3, target_address, deploy_code, interruptedMigration);
+    const deploy_code =`0x${createB.createBytecode(contract_code, {})}`;
+    const migrationResult = await deployLogic(web3, target_address, deploy_code, config, interruptedMigration);
     if (!migrationResult.migrationCompleted) {
         console.log('Could not migrate logicContract. Saving current migration state.');
         return migrationResult;
@@ -266,10 +278,11 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
             gas: 4700000,
             gasPrice: '2000000000'
         })
-            .on('error', function (error) {
-                console.log('Error: ', error);
+            .on('error', function (error, receipt) {
+                console.log(error);
+                console.log(receipt);
                 migrationResult.proxyAddress = undefined;
-                return migrationResult;
+                return;
             })
             .on('transactionHash', function (transactionHash) {
                 console.log('TxHash: ', transactionHash);
@@ -278,6 +291,11 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
                 migrationResult.proxyAddress = Web3.utils.toChecksumAddress(receipt.contractAddress);
                 console.log('Proxy Contract: ', receipt.contractAddress); // contains the new contract address
                 return receipt;
+            })
+            .catch(error => {
+                console.log(error);
+                migrationResult.proxyAddress = undefined;
+                return;
             });
         if (migrationResult.proxyAddress === undefined) {
             console.log('Could not migrate proxyContract. Saving current migration state.');
@@ -291,7 +309,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
     // Deploy Initialization Contract
     //
     let initInstance;
-    const initJsonRaw = fs.readFileSync("./contracts/InitContract.json");
+    const initJsonRaw = fs.readFileSync(config.contracts.initContractFilePath);
     const initJson = JSON.parse(initJsonRaw);
     let initCode = initJson.bytecode;
     let initAbi = initJson.abi;
@@ -300,7 +318,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
     const initContract = new web3.eth.Contract(initAbi);
     console.log('--- Deploy Init Contract ---');
     if (migrationResult.initAddress === undefined) {
-        console.log('Proxy bytecode: ', initCode);
+        console.log('Init bytecode: ', initCode);
         initInstance = await initContract.deploy({ data: initCode }).send({
             from: target_address,
             gas: 4700000,
@@ -318,6 +336,11 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
                 migrationResult.initAddress = Web3.utils.toChecksumAddress(receipt.contractAddress);
                 console.log('Init address: ', receipt.contractAddress); // contains the new contract address
                 return receipt;
+            })
+            .catch(error => {
+                console.log(error);
+                migrationResult.initAddress = undefined;
+                return;
             });
         if (migrationResult.initAddress === undefined) {
             console.log('Could not migrate initContract. Saving current migration state.');
@@ -329,16 +352,40 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
     
     initInstance.options.address = migrationResult.initAddress;
     // Set storage
+    console.log('Setting storage.');
     const storageKeys = Object.keys(contract_state);
+    // number of key value pairs migrated per batch
+    let keysPerBatch = 1;
+    // if there are more than 1 key value pairs to be processed, calculate maximized amount of pairs in one batch to optimize throughput capped by gasLimit
+    if (storageKeys.length > keysPerBatch) {
+        console.log('Calculating amount of key value pairs per batch');
+        const estimatedGasOneKeyValuePair = await initInstance.methods.setValue([`0x${storageKeys[0]}`], [`0x${contract_state[storageKeys[0]]}`]).estimateGas({
+            from: target_address,
+            gas: config.chain.gasLimit
+        });
+        const estimatedGasTwoKeyValuePairs = await initInstance.methods.setValue([`0x${storageKeys[0]}`, `0x${storageKeys[1]}`], [`0x${contract_state[storageKeys[0]]}`, `0x${contract_state[storageKeys[1]]}`]).estimateGas({
+            from: target_address,
+            gas: config.chain.gasLimit
+        });
+        const gasCostPerKeyValuePair = estimatedGasTwoKeyValuePairs - estimatedGasOneKeyValuePair;
+        const bufferedGasLimit = config.chain.gasLimit - config.chain.gasBuffer;
+        const administrativeGasCost = estimatedGasOneKeyValuePair - gasCostPerKeyValuePair;
+        const keyValuePairGasLimit = bufferedGasLimit - administrativeGasCost;
+        console.log(`Gas cost per migrated pair: ${gasCostPerKeyValuePair}, administrative gas cost: ${administrativeGasCost}, buffered gas limit for pairs per batch: ${keyValuePairGasLimit}`);
+        // if estimated gas cost for one pair exceeds gasLimit, try with one pair per transaction anyway
+        if (keyValuePairGasLimit < gasCostPerKeyValuePair) keysPerBatch = 1;
+        else keysPerBatch = parseInt(keyValuePairGasLimit / gasCostPerKeyValuePair);
+    }
+    
+    console.log(`Keys per batch: ${keysPerBatch}, keys to process: ${storageKeys.length}`);
     let keys = [];
     let values = [];
-    for(let i = 0; i < storageKeys.length; i++) {
-        const key  = storageKeys[i];
+    for (const key of storageKeys) {
         if (migrationResult.migratedKeys[`0x${key}`]) continue;
         keys.push(`0x${key}`);
         values.push(`0x${contract_state[key]}`);
-        if(((i+1) % 40) == 0) {
-            const migrated = await setValuesOnInitContract(target_address, initInstance, keys, values);
+        if(((keys.length) % keysPerBatch) == 0) {
+            const migrated = await setValuesOnInitContract(target_address, initInstance, keys, values, config);
             if (migrated) {
                 keys.forEach((key) => {
                     migrationResult.migratedKeys[key] = true;
@@ -351,7 +398,7 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
             values = [];
         }
     }
-    const migrated = await setValuesOnInitContract(target_address, initInstance, keys, values);
+    const migrated = await setValuesOnInitContract(target_address, initInstance, keys, values, config);
     if (migrated) {
         keys.forEach((key) => {
             migrationResult.migratedKeys[key] = true;
@@ -364,8 +411,8 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
     // selfdestruct initContract
     await initInstance.methods.close().send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error while trying to destruct initContract: ', error);
@@ -380,20 +427,23 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         })
         .catch((error) => {
             console.log('Error while trying to destruct initContract: ', error);
+            // TODO hier dann interrupted-migration einfuegen!
+            process.exit();
         });
     migrationResult.migrationCompleted = true;
     return migrationResult;
 };
 
-const setValuesOnInitContract = async (target_address, initContract, keys, values) => {
+const setValuesOnInitContract = async (target_address, initContract, keys, values, config) => {
+    if (keys.length < 1) return;
     console.log('keys: ', keys);
     console.log('values: ', values);
     if (keys.length < 1) return true;
     let migrated = false;
     await initContract.methods.setValue(keys, values).send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error: ', error);
@@ -403,15 +453,18 @@ const setValuesOnInitContract = async (target_address, initContract, keys, value
             console.log('TxHash: ', transactionHash)
         })
         .on('receipt', function (receipt) {
-            console.log('Added storage values');
-            console.log('Receipt: ', receipt);
-            migrated = true;
+            console.log('Added storage values'); // contains the new contract address
+            console.log(`Actual gas used: ${receipt.gasUsed}`);
             return receipt;
+        })
+        .catch(error => {
+            console.log(error);
+            return;
         });
     return migrated;
 };
 
-const deployLogic = async (web3, target_address, deploy_code, interruptedMigration) => {
+const deployLogic = async (web3, target_address, deploy_code, config, interruptedMigration) => {
     console.log('--- Deploy Logic ---');
     if (interruptedMigration.logicAddress !== undefined) {
         console.log(`Logic contract is already deployed at ${interruptedMigration.logicAddress}`);
@@ -422,8 +475,8 @@ const deployLogic = async (web3, target_address, deploy_code, interruptedMigrati
     let migrationResult = interruptedMigration;
     await myContract.deploy({data: deploy_code}).send({
         from: target_address,
-        gas: 4700000,
-        gasPrice: '2000000000'
+        gas: config.chain.gasLimit,
+        gasPrice: config.chain.gasPrice
     })
         .on('error', function (error) {
             console.log('Error: ', error);
@@ -436,6 +489,11 @@ const deployLogic = async (web3, target_address, deploy_code, interruptedMigrati
             console.log('Logic Contract: ', receipt.contractAddress); // contains the new contract address
             migrationResult.logicAddress = Web3.utils.toChecksumAddress(receipt.contractAddress);
             migrationResult.migrationCompleted = true;
+            console.log(`Actual gas used: ${receipt.gasUsed}`);
+            return migrationResult;
+        })
+        .catch((error) => {
+            console.log(error);
             return migrationResult;
         });
     return migrationResult;

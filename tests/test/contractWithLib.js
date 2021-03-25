@@ -6,6 +6,7 @@ const Web3 = require('web3');
 const source_dsl = 'http://localhost:8545';
 const target_dsl = 'http://localhost:8540';
 const continueMigrationFile = 'test/data/interruptedMigration.json';
+const configFilePath = 'tests/test/data/config.json';
 
 contract('ContractWithLib', (accounts) => {
     it('should migrate contract with smart contract in static code to new address.', async () => {
@@ -14,7 +15,7 @@ contract('ContractWithLib', (accounts) => {
         // saving eth balance of deploying address in state of source contract
         const sourceEthBalance = await contractWithLib.getBalanceInEth.call(accounts[0]);
 
-        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -i ./tests/${continueMigrationFile} --parity`;
+        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -k ${configFilePath} -i ./tests/${continueMigrationFile} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process

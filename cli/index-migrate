@@ -21,14 +21,21 @@ program
 const node = program.parity ? 'parity' : 'geth';
 
 // check if addresses have the right format.
-const addressFormat = new RegExp(/0x[\d\w]+/);
+const addressFormat = new RegExp(/0x[\d\w]{40}/);
 if ((!addressFormat.test(program.contract) && program.state_file === undefined) || !addressFormat.test(program.address)) {
     console.log('Addresses are not in the correct format. Please use "0x..." as a format.');
     process.exit();
 }
 
 return new Promise(async (resolve) => {
-    const stateJson = await contractHelper.extractContractFromJSONFile(program.state_file);
+    const stateJson = await contractHelper.readFromJSONFile(program.state_file);
+    let config = await contractHelper.readFromJSONFile(program.config);
+    if (config === undefined) {
+        config = await contractHelper.readFromJSONFile('config.json');
+        if (config === undefined) {
+            console.log('No config file found. Please create one under PROJECT_DIR/config.json');
+        }
+    }
 
     await redeployFunc.portContract(
         Web3.utils.toChecksumAddress(program.contract),
@@ -38,6 +45,7 @@ return new Promise(async (resolve) => {
         program.code_size ? program.code_size : 1000,
         {
             stateJson,
+            config,
             deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
             csv_path: program.file ? program.file : undefined,
             node: node,
