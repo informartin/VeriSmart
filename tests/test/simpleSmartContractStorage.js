@@ -20,7 +20,7 @@ contract('SimpleSmartContractStorage', (accounts) => {
 
         expect(savedContract).to.equal(convertLibInstance.address);
 
-        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${accounts[0]} -k ${configFilePath} -i ./tests/${continueMigrationFile} --parity`;
+        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile} -k ${configFilePath} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process

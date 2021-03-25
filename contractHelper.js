@@ -173,7 +173,7 @@ const writeToJson = async (storage, targetFile) => {
                 });
             });
         } else {
-            console.log('Could not write to file.');
+            console.log(e);
         }
     }
 };

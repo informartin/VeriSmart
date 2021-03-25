@@ -13,7 +13,7 @@ contract('SimpleStorage', (accounts) => {
         const source_b = await simpleStorageInstance.getB.call();
         
         // start migration process
-        const migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} -k ${configFilePath} -i ./tests/${continueMigrationFile} --address ${accounts[0]} --parity`;
+        const migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} -i tests/${continueMigrationFile} -k ${configFilePath} --address ${accounts[0]} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());
