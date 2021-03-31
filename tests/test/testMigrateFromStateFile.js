@@ -6,11 +6,12 @@ const fs = require('fs');
 
 const source_dsl = 'http://localhost:8545';
 const jsonFileName = 'test/data/testMigrateFromStateFile.json';
+const continueMigrationFile = 'test/data/interruptedMigration.json';
 const configFilePath = 'tests/test/data/config.json';
 
 contract('testMigrateFromState', (accounts) => {
     it('should migrate all values/references in state and code to other blockchain', async () => {
-        let migrateCommand = `./cli/index migrate --state_file tests/${jsonFileName} --target ${source_dsl} --address ${accounts[0]} -k ${configFilePath} --parity`;
+        let migrateCommand = `./cli/index migrate --state_file tests/${jsonFileName} --target ${source_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile} -k ${configFilePath} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
@@ -46,5 +47,6 @@ contract('testMigrateFromState', (accounts) => {
         const expectedValue = parseInt(`0x${jsonState['state_references'][0]['state'][Object.keys(jsonState['state_references'][0]['state'])[0]]}`, 'hex');
 
         expect(value).to.equal(expectedValue);
+        execSync(`rm ${continueMigrationFile}`);
     });
 });

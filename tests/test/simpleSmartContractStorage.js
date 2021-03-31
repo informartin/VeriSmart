@@ -5,7 +5,7 @@ const Web3 = require('web3');
 
 const source_dsl = 'http://localhost:8545';
 const target_dsl = 'http://localhost:8540';
-const target_address = '0x00ce0c25d2a45e2f22d4416606d928b8c088f8db';
+const continueMigrationFile = 'test/data/interruptedMigration.json';
 const configFilePath = 'tests/test/data/config.json';
 
 contract('SimpleSmartContractStorage', (accounts) => {
@@ -14,13 +14,13 @@ contract('SimpleSmartContractStorage', (accounts) => {
         const convertLibInstance = await ConvertLib.deployed();
 
         // saving smart contract lib in state of source contract
-        await simpleStorageInstance.setContract.sendTransaction(convertLibInstance.address, { from: target_address });
+        await simpleStorageInstance.setContract.sendTransaction(convertLibInstance.address, { from: accounts[0] });
 
         const savedContract = await simpleStorageInstance.getContract.call();
 
         expect(savedContract).to.equal(convertLibInstance.address);
 
-        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${target_address} -k ${configFilePath} --parity`;
+        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile} -k ${configFilePath} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
@@ -47,5 +47,6 @@ contract('SimpleSmartContractStorage', (accounts) => {
         result = output.toString().match(/[\w\W]+The states of the smart contracts are equal/);
 
         expect(result).not.equal(null);
+        execSync(`rm ${continueMigrationFile}`);
     });
 });

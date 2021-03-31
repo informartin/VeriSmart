@@ -136,13 +136,20 @@ const getStateFromTransactions = async (transactions, node, rpc, contract_addres
 };
 
 const readFromJSONFile = async (jsonFileName) => {
-    console.log('Extracting data from json file...');
+    console.log(`Extracting data from json file ${jsonFileName}...`);
     if (jsonFileName === undefined) return undefined;
-    const readStream = fs.createReadStream(jsonFileName);
+    let fd;
+    try {
+        fd = fs.openSync(jsonFileName);
+    } catch (error) {
+        console.log('File does not exist.');
+        return undefined;
+    }
+    const readStream = fs.createReadStream(undefined, { fd });
     const parseStream = BigJson.createParseStream();
 
     let bigJson;
-    return await new Promise((resolve) => {
+    return new Promise((resolve) => {
         parseStream.on('data', function(jsonData) {
             bigJson = jsonData;
         });
@@ -184,7 +191,7 @@ const writeToJson = async (storage, targetFile) => {
                 });
             });
         } else {
-            console.log('Could not write to file.');
+            console.log(e);
         }
     }
 };
