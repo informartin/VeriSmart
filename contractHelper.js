@@ -9,7 +9,6 @@ const getState = async (contract_address,
                         source_web3,
                         {
                             deployment_tx_hash,
-                            csv_path,
                             node,
                             fat_db,
                             max_depth,
@@ -24,7 +23,7 @@ const getState = async (contract_address,
         return undefined;
     }
 
-    const contract = await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db, block_number, targetFile: undefined});
+    const contract = await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, node, fat_db, block_number, targetFile: undefined});
 
     // Mapping of referenced contract addresses
     let storage = contract.storage;
@@ -49,7 +48,6 @@ const getState = async (contract_address,
                         source_web3,
                         {
                             deployment_tx_hash,
-                            csv_path,
                             node,
                             fat_db,
                             max_depth: max_depth - 1,
@@ -83,7 +81,6 @@ const getState = async (contract_address,
                 source_web3,
                 {
                     deployment_tx_hash,
-                    csv_path,
                     node,
                     fat_db,
                     max_depth: max_depth - 1,

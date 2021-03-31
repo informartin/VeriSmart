@@ -2,7 +2,7 @@ const transactionsFunc = require('./getTransactions.js');
 const request = require('request-promise-native');
 const contractHelper = require('./contractHelper');
 
-const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path, node, fat_db, block_number, targetFile}) => {
+const getContract = async (contract_address, web3, {deployment_tx_hash, node, fat_db, block_number, targetFile}) => {
 
     console.log('Retrieving contract code for: ', contract_address);
 
@@ -24,8 +24,6 @@ const getContract = async (contract_address, web3, {deployment_tx_hash, csv_path
         
         contract_code = contractCode.substring(2);
         let transactions;
-        if (typeof csv_path !== 'undefined')
-            transactions = await transactionsFunc.getTransactionsFromCSV(csv_path);
         if (typeof deployment_tx_hash === 'undefined')
             transactions = await transactionsFunc.getTransactions(contract_address, block_number, web3);
         else

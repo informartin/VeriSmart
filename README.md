@@ -24,13 +24,12 @@ A detailed description can be found in the corresponding research paper: [Verifi
 ###  Get state variables of smart contract:
 ```
 $ verismart help get-state
-Usage: verismart-get-state [options]
+Usage: verismart get-state [options]
 
 Options:
   -s, --source <required>            Source RPC
   -c, --contract <required>          Source contract address
   -d, --deployment_hash [optional]   Hash of the deployment transaction
-  -x, --transaction-input [optional] Source file (csv) containing TXs to be replayed
   -p, --parity                       Use parity compatible replay commands instead of geth
   -q, --fat-db [result_limit (int)]  Use key retrieval from parity's fat_db feature. Provide result limit for retrieved storage keys. Default: 100
   -r, --recursion [optional]         Limit depth of recursively deployed dependency
@@ -51,7 +50,6 @@ Options:
   -s, --source <required>            Source RPC
   -c, --contract <required>          Source contract address
   -d, --deployment_hash [optional]   Hash of the deployment transaction
-  -x, --transaction-input [optional] Source file (csv) containing TXs to be replayed
   -f, --state_file [optional]        JSON file with key/value mapping of the state of the source contract
   -p, --parity                       Use parity compatible replay commands instead of geth
   -q, --fat-db [result_limit (int)]  Use key retrieval from parity's fat_db feature. Provide result limit for retrieved storage keys. Default: 100
@@ -112,8 +110,8 @@ redeploy.portContract(
     'http://localhost:8545',                      // RPC of source blockchain
     'http://localhost:8546',                      // RPC of target blockchain
     '0x20a508640B446990c781Cd541B9a2828ACA3a350', // Account to use on target chain
-    {csv_path: './data.csv',                      // Optional: transactions that have been sent to contract
-    node: 'geth'});                               // geth and parity are supported for migrations
+    { node: 'geth' }                              // geth and parity are supported for migrations
+);                               
 ```
 
 * To obtain state roots from target blocks on both blockchains, use web3: 

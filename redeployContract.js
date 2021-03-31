@@ -13,7 +13,6 @@ const portContract = async (contract_address,
                       code_size,
                       {
                         deployment_tx_hash,
-                        csv_path,
                         node,
                         fat_db,
                         max_depth,
@@ -26,7 +25,7 @@ const portContract = async (contract_address,
     const source_web3 = new Web3(source_rpc);
     const target_web3 = new Web3(target_rpc);
 
-    let source_contract = stateJson !== undefined ? stateJson : await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, csv_path, node, fat_db,max_depth, block_number, targetFile});
+    let source_contract = stateJson !== undefined ? stateJson : await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, node, fat_db,max_depth, block_number, targetFile});
 
     // Mapping of referenced contract addresses on old and new rpc
     let storage = source_contract['state'] ? source_contract['state'] : source_contract.storage;
@@ -53,7 +52,6 @@ const portContract = async (contract_address,
                         const address = await portContract(Web3.utils.toChecksumAddress(value), source_rpc, target_rpc, target_address, code_size, 
                             {
                                 deployment_tx_hash,
-                                csv_path,
                                 node,
                                 fat_db,
                                 stateJson,
@@ -86,7 +84,6 @@ const portContract = async (contract_address,
                     const address = await portContract(Web3.utils.toChecksumAddress(stateReference['contract_address']), source_rpc, target_rpc, target_address, code_size, 
                         {
                             deployment_tx_hash,
-                            csv_path,
                             node,
                             fat_db,
                             max_depth,
@@ -121,7 +118,6 @@ const portContract = async (contract_address,
             const contractAddress = await portContract(contract['contract_address'], source_rpc, target_rpc, target_address, code_size, 
                 {
                     deployment_tx_hash,
-                    csv_path,
                     node,
                     fat_db,
                     max_depth,
