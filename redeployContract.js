@@ -221,7 +221,7 @@ const portContract = async (contract_address,
     }
     
     // calculate how much the migration costs
-    let roughEstimate = Object.keys(storage).length < 1 ? 0 : Object.keys(storage).length * config.chain.deployingStorageCost + config.chain.gasBuffer;
+    let roughEstimate = Object.keys(storage).length * config.chain.deployingStorageCost + config.chain.gasBuffer;
     console.log(`Estimated gas for deploying contract storage with the help of config.deployingStorageCost: ${roughEstimate}`);
     let migrationResult;
     if (roughEstimate <= config.chain.gasLimit) {
