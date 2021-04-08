@@ -250,7 +250,7 @@ const getReferences = async (contract, rpc) => {
             console.log(`Address found in storage: ${value}`);
 
             const code = await web3_rpc.eth.getCode(value);
-
+            console.log(`Code length: ${code.length}`);
             if (code.length > 3) {
                 referenced_contract_addresses[index] = paddedValue;
                 referenced_contract_addresses_values.push(value);

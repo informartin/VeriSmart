@@ -20,6 +20,8 @@ const isStateEqual = async (
 
     // use latest block of source blockchain if none was specified
     let true_source_block = source_block !== undefined ? source_block : await web3_source_rpc.eth.getBlockNumber();
+
+    console.log(`Using source contract at block nr ${true_source_block}`);
     
     // get deployment block of init block if no block was specified
     let true_target_block;

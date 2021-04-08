@@ -231,7 +231,15 @@ const portContract = async (contract_address,
         const estimatedGas = await logicContractInstance.deploy().estimateGas();
         const bufferedEsimtatedGas = estimatedGas + config.chain.gasBuffer;
         console.log(`Estimated gas for migrating logic contract only: ${estimatedGas}, estimatedGas + gasBuffer = ${bufferedEsimtatedGas}, gasLimit: ${config.chain.gasLimit}`);
-        if (bufferedEsimtatedGas <= config.chain.gasLimit) migrationResult = await deployLogic(target_web3, target_address, deploy_code, config, interruptedMigration);
+        if (bufferedEsimtatedGas <= config.chain.gasLimit) {
+            migrationResult = await deployLogic(target_web3, target_address, deploy_code, config, interruptedMigration);
+            if (migrationResult.migrationCompleted) {
+                const storageKeys = Object.keys(storage);
+                for (const key of storageKeys) {
+                    migrationResult.migratedKeys[key] = true;
+                }
+            }
+        }
         else migrationResult = await deployLargeContract(target_web3, target_address, contract_code, storage, config, interruptedMigration);
     } else {
         migrationResult = await deployLargeContract(target_web3, target_address, contract_code, storage, config, interruptedMigration);

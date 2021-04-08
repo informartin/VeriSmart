@@ -45,16 +45,25 @@ const getStorageFromParityFatDB = async (contract_address, web3, result_limit, b
 
     console.log(`Retrieving state from Parity fat-db with limit ${result_limit}`);
 
+    block_number = block_number == 'latest' || block_number == 'earliest' || block_number == 'pending' ? block_number : web3.utils.toHex(block_number);
     let storage = {};
     let offset = null;
     while (result_limit === limit) {
-
+        console.log(`Executing:\nPOST to ${web3.currentProvider.host} with body {"jsonrpc":"2.0", "method":"parity_listStorageKeys","params": [${contract_address}, ${limit}, ${offset}, ${block_number}], "id":1}`);
         const body = await request.post({
             url: web3.currentProvider.host,
             method: "POST",
             json: true,
             body: {"jsonrpc":"2.0", "method":"parity_listStorageKeys","params": [contract_address, limit, offset, block_number], "id":1}
         });
+
+        if (body.error) {
+            console.log(body.error.message);
+            throw new Error();
+        } else if (!body.result) {
+            console.log(`Got result = '${body.result}' back.`);
+            throw new Error();
+        }
         
         result_limit = body.result.length;
         console.log("Processing ", result_limit, " keys")
