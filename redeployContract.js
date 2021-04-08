@@ -276,8 +276,8 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         console.log('Proxy bytecode: ', proxyCode);
         await proxyContract.deploy({data: proxyCode}).send({
             from: target_address,
-            gas: 4700000,
-            gasPrice: '2000000000'
+            gas: config.chain.gasLimit,
+            gasPrice: config.chain.gasPrice
         })
             .on('error', function (error, receipt) {
                 console.log(error);
@@ -323,8 +323,8 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         console.log('Init bytecode: ', initCode);
         initInstance = await initContract.deploy({ data: initCode }).send({
             from: target_address,
-            gas: 4700000,
-            gasPrice: '2000000000'
+            gas: config.chain.gasLimit,
+            gasPrice: config.chain.gasPrice
         })
             .on('error', function (error) {
                 console.log('Error: ', error);
