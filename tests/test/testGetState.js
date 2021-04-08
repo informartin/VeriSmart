@@ -8,7 +8,7 @@ const json = require('big-json');
 
 const source_dsl = 'http://localhost:8545';
 const jsonFileName = 'test.json';
-const validJsonFileName = './test/data/smartContractStorageWithConvertLib.json';
+const validJsonFileName = 'test/data/smartContractStorageWithConvertLib.json';
 
 contract('testGetState', (accounts) => {
     it('should return all values/references in state and code to other contracts', async () => {
