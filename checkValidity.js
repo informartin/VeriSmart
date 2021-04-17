@@ -15,6 +15,7 @@ const isStateEqual = async (
         fat_db
     }
 ) => {
+    // TODO implement recursive strategy for cmd verify 
     const web3_source_rpc = new Web3(source_rpc);
     const web3_target_rpc = new Web3(target_rpc);
 

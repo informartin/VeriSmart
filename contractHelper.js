@@ -4,6 +4,8 @@ const fs = require("fs");
 const BigJson = require('big-json');
 const { EVM } = require('evm');
 const request = require('request-promise-native');
+const rlp = require('rlp');
+const keccak = require('keccak');
 
 const getState = async (contract_address,
                         source_web3,
@@ -13,7 +15,8 @@ const getState = async (contract_address,
                             fat_db,
                             max_depth,
                             block_number,
-                            targetFile
+                            targetFile,
+                            alreadyVisitedContracts
                         }) => {
     let raw_contract_code = await source_web3.eth.getCode(contract_address);
     console.log('Code: ', raw_contract_code);
@@ -22,6 +25,10 @@ const getState = async (contract_address,
     if (!(raw_contract_code.length > 3)) {
         return undefined;
     }
+
+    // initializing visited contracts
+    let visitedContracts = alreadyVisitedContracts ? alreadyVisitedContracts : [];
+    visitedContracts.push(contract_address);
 
     const contract = await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, node, fat_db, block_number, targetFile: undefined});
 
@@ -39,10 +46,26 @@ const getState = async (contract_address,
             // remove leading zeros
             const value = paddedValue.replace(/^0+/, '');
             if (source_web3.utils.isAddress(value)) {
-                console.log('Address found in Storage: ', value);
+                console.log(`Address found in Storage from ${contract_address}: `, value);
                 const checksumAddress = Web3.utils.toChecksumAddress(value);
                 const indexOfExistingReference = stateReferencedContracts.findIndex((referencedContract) => referencedContract.contract_address === checksumAddress);
-                if (indexOfExistingReference < 0) {
+                if (checksumAddress === contract_address) {
+                    console.log(`Contract ${contract_address} references itself in state`);
+                    stateReferencedContracts.push({
+                        contract_address,
+                        index,
+                        self_reference: true
+                    });
+                    delete storage[index];
+                } else if (visitedContracts.findIndex((visitedContract) => (checksumAddress === visitedContract)) > -1) {
+                    stateReferencedContracts.push({
+                        contract_address: checksumAddress,
+                        index,
+                        // todo das hier anders vermerken
+                        referenced_earlier: true
+                    });
+                    delete storage[index];
+                } else if (indexOfExistingReference < 0) {
                     const referencedContract = await getState(
                         checksumAddress,
                         source_web3,
@@ -52,7 +75,8 @@ const getState = async (contract_address,
                             fat_db,
                             max_depth: max_depth - 1,
                             block_number,
-                            targetFile: undefined
+                            targetFile: undefined,
+                            alreadyVisitedContracts: visitedContracts
                         }
                     );
                     if (referencedContract !== undefined) {
@@ -85,7 +109,8 @@ const getState = async (contract_address,
                     fat_db,
                     max_depth: max_depth - 1,
                     block_number,
-                    targetFile: undefined
+                    targetFile: undefined,
+                    alreadyVisitedContracts: visitedContracts
                 }
             );
 
@@ -445,6 +470,15 @@ const replayTransaction = async (transaction, node, rpc, contract_address, id) =
     }
 };
 
+const calculateContractAddress = (nonce, target_address) => {
+    const input_arr = [target_address, nonce];
+    const rlp_encoded = rlp.encode(input_arr);
+    let contract_address = keccak('keccak256').update(rlp_encoded).digest('hex');
+    contract_address = contract_address.substring(24);
+    console.log("Calculated Contract address: " + contract_address);
+    return contract_address;
+};
+
 module.exports.getState = getState;
 module.exports.writeToJson = writeToJson;
 module.exports.readFromJSONFile = readFromJSONFile;
@@ -456,3 +490,4 @@ module.exports.getLogicContractAddress = getLogicContractAddress;
 module.exports.getInitContractAddress = getInitContractAddress;
 module.exports.findDeploymentBlock = findDeploymentBlock;
 module.exports.getStateFromTransactions = getStateFromTransactions;
+module.exports.calculateContractAddress = calculateContractAddress;

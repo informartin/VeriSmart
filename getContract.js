@@ -70,7 +70,7 @@ const getStorageFromParityFatDB = async (contract_address, web3, result_limit, b
         offset = body.result[body.result.length-1];
         for (let i = 0; i < body.result.length; i++) {
             let key = body.result[i];
-            let value = await web3.eth.getStorageAt(contract_address, key);
+            let value = await web3.eth.getStorageAt(contract_address, key, block_number);
             storage[key.substring(2)] = value.substring(2)
         }
     }

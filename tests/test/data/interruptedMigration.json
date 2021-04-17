@@ -1,0 +1,10 @@
+{
+    "sourceAddress": "0xB4beC81674DD719bf4e0fD8b2762972a5788509F",
+    "migratedKeys": {
+        "0000000000000000000000000000000000000000000000000000000000000000": true
+    },
+    "migrationCompleted": true,
+    "logicAddress": "0x48863536190dbE72569739Ddf2eA58Bebba68E3D",
+    "staticReferences": {},
+    "stateReferences": {}
+}
