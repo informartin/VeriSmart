@@ -45,7 +45,7 @@ const portContract = async (contract_address,
     const source_web3 = new Web3(source_rpc);
     const target_web3 = new Web3(target_rpc);
 
-    let source_contract = stateJson !== undefined ? stateJson : await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, node, fat_db,max_depth, block_number, targetFile});
+    let source_contract = stateJson !== undefined ? stateJson : await contractFunc.getContract(contract_address, source_web3, {deployment_tx_hash, node, fat_db, max_depth, block_number, targetFile});
 
     // Mapping of referenced contract addresses on old and new rpc
     let storage = source_contract['state'] ? source_contract['state'] : source_contract.storage;
@@ -244,7 +244,7 @@ const portContract = async (contract_address,
     }
     
     // calculate how much the migration costs
-    let roughEstimate = Object.keys(storage).length < 1 ? 0 : Object.keys(storage).length * config.chain.deployingStorageCost + config.chain.gasBuffer;
+    let roughEstimate = Object.keys(storage).length * config.chain.deployingStorageCost + config.chain.gasBuffer;
     console.log(`Estimated gas for deploying contract storage with the help of config.deployingStorageCost: ${roughEstimate}`);
     let migrationResult;
     if (roughEstimate <= config.chain.gasLimit) {
@@ -307,8 +307,8 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         console.log('Proxy bytecode: ', proxyCode);
         await proxyContract.deploy({data: proxyCode}).send({
             from: target_address,
-            gas: 4700000,
-            gasPrice: '2000000000'
+            gas: config.chain.gasLimit,
+            gasPrice: config.chain.gasPrice
         })
             .on('error', function (error, receipt) {
                 console.log(error);
@@ -354,8 +354,8 @@ const deployLargeContract = async (web3, target_address, contract_code, contract
         console.log('Init bytecode: ', initCode);
         initInstance = await initContract.deploy({ data: initCode }).send({
             from: target_address,
-            gas: 4700000,
-            gasPrice: '2000000000'
+            gas: config.chain.gasLimit,
+            gasPrice: config.chain.gasPrice
         })
             .on('error', function (error) {
                 console.log('Error: ', error);
