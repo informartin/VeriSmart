@@ -49,23 +49,7 @@ const getState = async (contract_address,
                 console.log(`Address found in Storage from ${contract_address}: `, value);
                 const checksumAddress = Web3.utils.toChecksumAddress(value);
                 const indexOfExistingReference = stateReferencedContracts.findIndex((referencedContract) => referencedContract.contract_address === checksumAddress);
-                if (checksumAddress === contract_address) {
-                    console.log(`Contract ${contract_address} references itself in state`);
-                    stateReferencedContracts.push({
-                        contract_address,
-                        index,
-                        self_reference: true
-                    });
-                    delete storage[index];
-                } else if (visitedContracts.findIndex((visitedContract) => (checksumAddress === visitedContract)) > -1) {
-                    stateReferencedContracts.push({
-                        contract_address: checksumAddress,
-                        index,
-                        // todo das hier anders vermerken
-                        referenced_earlier: true
-                    });
-                    delete storage[index];
-                } else if (indexOfExistingReference < 0) {
+                if (indexOfExistingReference < 0) {
                     const referencedContract = await getState(
                         checksumAddress,
                         source_web3,

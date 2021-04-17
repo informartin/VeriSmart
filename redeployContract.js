@@ -51,8 +51,6 @@ const portContract = async (contract_address,
     let storage = source_contract['state'] ? source_contract['state'] : source_contract.storage;
     let contract_code = source_contract['raw_contract_code'] ? source_contract['raw_contract_code'].substring(2) : source_contract.contract_code;
     let referenced_contract_addresses = {};
-    let self_state_references_keys = [];
-    let self_static_references_keys = false;
     if (max_depth != 0) {
         if (stateJson === undefined) {
             //check if storage variables are contracts
@@ -64,9 +62,6 @@ const portContract = async (contract_address,
                     // check if if it has been processed before
                     if (value in referenced_contract_addresses) {
                         storage[index] = referenced_contract_addresses[value];
-                    } else if (Web3.utils.toChecksumAddress(value) === source_contract) {
-                        console.log(`Contract ${source_contract} references itself in state`);
-                        self_state_references_keys.push(index);
                     } else {
                         const code = await source_web3.eth.getCode(value);
                         console.log(`Code of ${value}:`, code);
@@ -125,9 +120,6 @@ const portContract = async (contract_address,
                 if (stateReference['contract_address'] in referenced_contract_addresses) {
                     console.log('--- Duplicate reference found in state: ', stateReference['contract_address'], ' ---');
                     storage[stateReference['index']] = referenced_contract_addresses[stateReference['contract_address']];
-                } else if (stateReference['contract_address'] === source_contract) {
-                    console.log(`Contract ${source_contract} references itself in state at key ${stateReference['index']}`);
-                    self_state_references_keys.push(stateReference['index']);
                 } else {
                     console.log('--- Reference found in state, migrating: ', stateReference['contract_address'], ' ---');
                     const migratedContractsOfReference = interruptedMigration.stateReferences[stateReference['index']] !== undefined ? interruptedMigration.stateReferences[stateReference['index']] : {
@@ -178,14 +170,9 @@ const portContract = async (contract_address,
         let referencedContracts;
         if (stateJson === undefined) {
             referencedContracts = await contractHelper.getStaticReferences(source_web3, contract_code, contract_address);
-            referencedContracts = referencedContracts
-                .map(contract => { 
-                    if (contract === source_contract) self_static_references_keys = true;
-                    return { contract_address: contract }; 
-                }).filter(contractObject => (contractObject.contract_address !== source_contract));
+            referencedContracts = referencedContracts.map(contract => { return { contract_address: contract }; });
         } else {
             referencedContracts = stateJson['static_references'];
-            if (source_contract in stateJson['static_references']) self_static_references_keys = true;
             referencedContracts = referencedContracts.filter(contractObject => (contractObject.contract_address !== source_contract))
         }
         
@@ -228,21 +215,6 @@ const portContract = async (contract_address,
         }
     }
 
-    // calculate new contract address
-    const currentNonce = await source_web3.eth.getTransactionCount(target_address);
-    const newContractAddress = contractHelper.calculateContractAddress(currentNonce, target_address);
-
-    // replace self references in static code if any (prob not possible)
-    if (self_static_references_keys) {
-        console.log(`Replacing self reference ${source_contract.substring(2).toLowerCase()} with calculated address at new chain: ${newContractAddress}`);
-        contract_code = contract_code.replaceAll(source_contract.substring(2).toLowerCase(), newContractAddress);
-    }
-
-    // replace self references in state code if any
-    for (const key of self_state_references_keys) {
-        storage[key] = Web3.utils.padLeft(newContractAddress, 64).substring(2);
-    }
-    
     // calculate how much the migration costs
     let roughEstimate = Object.keys(storage).length * config.chain.deployingStorageCost + config.chain.gasBuffer;
     console.log(`Estimated gas for deploying contract storage with the help of config.deployingStorageCost: ${roughEstimate}`);
