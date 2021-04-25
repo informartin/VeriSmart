@@ -26,6 +26,18 @@ const getState = async (contract_address,
         return undefined;
     }
 
+    if (typeof targetFile !== 'undefined') {
+        let regexr = new RegExp(/([\./\w]*\/)?(.+)\.json/g);
+        let extractedFileName = regexr.exec(targetFile);
+        if (extractedFileName === null) {
+            console.log('targetFile needs to have the following format: /path/to/file/theFile.json');
+            return undefined;
+        }
+        if (block_number !== undefined && block_number !== 'latest') {
+            targetFile = targetFile.replace(extractedFileName[2], `${extractedFileName[2]}_${block_number}`);
+        }
+    }
+
     // initializing visited contracts
     let visitedContracts = alreadyVisitedContracts ? alreadyVisitedContracts : [];
     visitedContracts.push(contract_address);
@@ -105,9 +117,10 @@ const getState = async (contract_address,
     const contractState = { 
         contract_address, 
         raw_contract_code, 
+        block_number,
         state: storage, 
         static_references,
-        state_references: stateReferencedContracts, 
+        state_references: stateReferencedContracts
     };
 
     if (typeof targetFile !== 'undefined') await writeToJson(contractState, targetFile);
