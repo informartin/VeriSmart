@@ -21,6 +21,9 @@ A detailed description can be found in the corresponding research paper: [Verifi
 
 ## Command line interface
 
+*Note*: Due to the 2GB default memory limit of nodejs, Verismart can run into a buffer overflow when dealing with big contracts (>750mb).
+We recommend using the option `NODE_OPTIONS=--max_old_space_size=8192` infront of the commands to increase the memory limit.
+
 ###  Get state variables of smart contract:
 ```
 $ verismart help get-state
