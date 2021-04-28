@@ -8,27 +8,26 @@ const target_dsl = 'http://localhost:8540';
 const continueMigrationFile = 'test/data/migrationState';
 const configFilePath = 'tests/test/data/config.json';
 
-contract('SimpleSmartContractStorage', (accounts) => {
-    it('should migrate contract with smart contract in state to new address.', async () => {
+contract('testMigrateFromCertainBlock', (accounts) => {
+    it('should migrate contract from certain block (that is not the latest) correctly', async () => {
         const simpleStorageInstance = await SimpleSmartContractStorage.deployed();
         const convertLibInstance = await ConvertLib.deployed();
+
+        const blockBeforeSetContract = await web3.eth.getBlockNumber();
 
         // saving smart contract lib in state of source contract
         await simpleStorageInstance.setContract.sendTransaction(convertLibInstance.address, { from: accounts[0] });
 
-        const savedContract = await simpleStorageInstance.getContract.call();
-
-        expect(savedContract).to.equal(convertLibInstance.address);
-
-        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile}.json -k ${configFilePath} --parity`;
+        // migrating from block before setting the contract
+        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${simpleStorageInstance.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile}.json -k ${configFilePath} -b ${blockBeforeSetContract} --parity -q`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());
 
-        const proxyAddress = output.toString().match(/[\w\W]+Logic Contract:[\w\W]+Logic Contract:  (0x[\w\d]{40})/)[1];
-        console.log(`proxyAddress: ${proxyAddress}`);
+        const proxyAddress = output.toString().match(/[\w\W]+Logic Contract:  (0x[\w\d]{40})/)[1];
+        console.log(`logicContract: ${proxyAddress}`);
 
         expect(proxyAddress).not.equal(undefined);
 
@@ -37,9 +36,10 @@ contract('SimpleSmartContractStorage', (accounts) => {
 
         const target_b = await targetSimpleStorageInstance.methods.getContract().call();
 
-        expect(target_b.toString()).not.equal(savedContract, 'saved smart contract in storage contract is same between source and target chain');
+        console.log(`target saved contract here: ${target_b}`);
+        expect(target_b.toString()).to.equal('0x0000000000000000000000000000000000000000', 'Migration cmd didnt use the correct block.');
 
-        const verifyCommand = `./cli/index verify --source_rpc ${source_dsl} --source_contract_address ${simpleStorageInstance.address} --target_rpc ${target_dsl} --target_contract_address ${proxyAddress} --parity`;
+        const verifyCommand = `./cli/index verify --source_rpc ${source_dsl} --source_contract_address ${simpleStorageInstance.address} --target_rpc ${target_dsl} --target_contract_address ${proxyAddress} --parity -q -b ${blockBeforeSetContract}`;
         console.log(`Executing: \n${verifyCommand}`);
         output = execSync(verifyCommand, { cwd: './../' });
         console.log(output.toString());

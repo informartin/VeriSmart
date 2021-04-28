@@ -10,6 +10,6 @@
         "initContractFilePath":"contracts/InitContract.json"
     },
     "migration": {
-        "interruptedMigrationFilePath": "tests/test/data/interrupted-migration.json"
+        "migrationStateFilePath": "tests/test/data/migrationState.json"
     }
 }

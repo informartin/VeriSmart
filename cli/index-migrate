@@ -47,7 +47,6 @@ return new Promise(async (resolve) => {
             stateJson,
             config,
             deployment_tx_hash: program.deployment_hash ? program.deployment_hash : undefined,
-            csv_path: program.file ? program.file : undefined,
             node: node,
             fat_db: program.fatDb ? program.fatDb : false,
             max_depth: program.recursion ? program.recursion : -1,

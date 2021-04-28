@@ -7,10 +7,15 @@ const ContractHelper = require('../../contractHelper');
 const json = require('big-json');
 
 const source_dsl = 'http://localhost:8545';
-const jsonFileName = 'test.json';
+const jsonFileName = 'test';
 const validJsonFileName = 'test/data/smartContractStorageWithConvertLib.json';
 
 contract('testGetState', (accounts) => {
+
+    afterEach(() => {
+        execSync(`rm ../${jsonFileName}*.json`);
+    });
+
     it('should return all values/references in state and code to other contracts', async () => {
         const simpleStorageInstance = await SimpleSmartContractStorage.deployed();
         const contractWithLibInstance = await ContractWithLib.deployed();
@@ -23,14 +28,14 @@ contract('testGetState', (accounts) => {
 
         expect(savedContract).to.equal(contractWithLibInstance.address);
 
-        let migrateCommand = `./cli/index get-state --source ${source_dsl} --contract ${simpleStorageInstance.address} --parity --fat-db -o ${jsonFileName}`;
+        let migrateCommand = `./cli/index get-state --source ${source_dsl} --contract ${simpleStorageInstance.address} --parity --fat-db -o ${jsonFileName}.json`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());
 
-        const generatedJson = JSON.parse(fs.readFileSync(`../${jsonFileName}`, { encoding: 'utf-8' }));
+        const generatedJson = JSON.parse(fs.readFileSync(`../${jsonFileName}.json`, { encoding: 'utf-8' }));
         const validJson = JSON.parse(fs.readFileSync(validJsonFileName, { encoding: 'utf-8' }));
 
         // need to dynamically change addresses in the correct state json file
@@ -42,8 +47,6 @@ contract('testGetState', (accounts) => {
         validJson["state_references"][0]['raw_contract_code'] = contractWithLibByteCode;
         validJson["state_references"][0]['static_references'][0]['contract_address'] = libInstance.address;
         validJson["state_references"][0]['static_references'][0]['raw_contract_code'] = convertLibByteCode;
-
-        execSync(`rm ../${jsonFileName}`);
 
         expect(validJson).to.deep.equal(generatedJson);
     });
@@ -60,16 +63,14 @@ contract('testGetState', (accounts) => {
 
         expect(savedContract).to.equal(contractWithLibInstance.address);
 
-        let migrateCommand = `./cli/index get-state --source ${source_dsl} --contract ${simpleStorageInstance.address} --parity --fat-db -r 0 -o ${jsonFileName}`;
+        let migrateCommand = `./cli/index get-state --source ${source_dsl} --contract ${simpleStorageInstance.address} --parity --fat-db -r 0 -o ${jsonFileName}.json`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
         let output = execSync(migrateCommand, { cwd: './../' });
         console.log(output.toString());
 
-        const generatedJson = JSON.parse(fs.readFileSync(`../${jsonFileName}`, { encoding: 'utf-8' }));
-
-        execSync(`rm ../${jsonFileName}`);
+        const generatedJson = JSON.parse(fs.readFileSync(`../${jsonFileName}.json`, { encoding: 'utf-8' }));
 
         expect(generatedJson.static_references).to.be.an('array').that.is.empty;
         expect(generatedJson.state_references).to.be.an('array').that.is.empty;
@@ -99,7 +100,5 @@ contract('testGetState', (accounts) => {
     //     });
 
     //     expect(bigJson).to.deep.equal(bigJsonFromFile);
-
-    //     execSync(`rm ${jsonFileName}`);
     // });
 });
