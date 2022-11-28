@@ -81,3 +81,6 @@ typings/
 
 #IntelliJ
 .idea
+
+# Evaluation results
+tests/evaluation.csv
