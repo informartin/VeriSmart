@@ -20,23 +20,28 @@ contract('StoageMapping', (accounts) => {
         for(i = 0; i < numberOfVariables; i = i+stepLength) {
             for(j = i; j < i+stepLength; j++) {
                 await storageMappingInstance.setValue(j+1,j+1);
-                console.log(`set values to: ${j}`);
             }
 
             const migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${storageMappingInstance.address} --target ${target_dsl} -k ${configFilePath} --address ${accounts[0]} --parity`;
-            const startTime = performance.now()
+            const startTime = performance.now();
             const output = execSync(migrateCommand, { cwd: './../' });
-            const endTime = performance.now()
-            console.log(output.toString());
-            lines.push([i, endTime-startTime]);
+            const endTime = performance.now();
+            const outputString = output.toString();
+            const regex = /Actual gas used: (\d+)/g;
+
+            const results = [...outputString.matchAll(regex)];
+            let totalGas = 0;
+            for(j = 0; j < results.length; j++)
+                totalGas += parseInt(results[j][1]);
+
+            console.log(outputString);
+            console.log('total gas: ', totalGas);
+            lines.push([i, endTime-startTime, totalGas]);
             execSync(`rm ${continueMigrationFile}*.json`);
         }
         
-        let columns = {
-            id: 'number',
-            name: 'time'
-          };
           
+        const columns = ["number", "time", "gas"]
 
         csv.stringify(lines, { header: true, columns: columns }, (err, output) => {
             if (err) throw err;
