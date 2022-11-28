@@ -4,7 +4,7 @@ const Web3 = require('web3');
 
 const source_dsl = 'http://localhost:8545';
 const target_dsl = 'http://localhost:8540';
-const continueMigrationFile = 'test/data/interruptedMigration.json';
+const continueMigrationFile = 'test/data/migrationState';
 const configFilePath = 'tests/test/data/config.json';
 
 contract('ContractWithLib', (accounts) => {
@@ -14,7 +14,7 @@ contract('ContractWithLib', (accounts) => {
         // saving eth balance of deploying address in state of source contract
         const sourceEthBalance = await contractWithLib.getBalanceInEth.call(accounts[0]);
 
-        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile} -k ${configFilePath} --parity`;
+        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile}.json -k ${configFilePath} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
@@ -38,7 +38,10 @@ contract('ContractWithLib', (accounts) => {
         console.log(output.toString());
 
         result = output.toString().match(/[\w\W]+The states of the smart contracts are equal/);
-        execSync(`rm ${continueMigrationFile}`);
         expect(result).not.equal(null);
+    });
+
+    afterEach(() => {
+        execSync(`rm ${continueMigrationFile}*.json`);
     });
 });

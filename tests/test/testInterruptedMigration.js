@@ -11,17 +11,17 @@ chai.use(chaiFiles);
 file = chaiFiles.file;  
 const source_dsl = 'http://localhost:8545';
 const target_dsl = 'http://localhost:8540';
-const continueMigrationFile = 'test/data/interruptedMigration.json';
-const expectedInterruptedMigrationFile = 'test/data/interruptedMigration_contractWithLib.json';
+const continueMigrationFile = 'test/data/migrationState';
+const expectedmigrationStateFile = 'test/data/interruptedMigration_contractWithLib.json';
 const lowGasConfigFilePath = 'tests/test/data/low_gas_limit_config.json';
 const configFilePath = 'tests/test/data/config.json';
 
-contract('testInterruptedMigration', (accounts) => {
+contract('testmigrationState', (accounts) => {
     it('should migrate successfully with interruption', async () => {
         const contractWithLib = await ContractWithLib.deployed();
         const convertLib = await ConvertLib.deployed();
 
-        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile} -k ${lowGasConfigFilePath} --parity`;
+        let migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile}.json -k ${lowGasConfigFilePath} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         // start migration process
@@ -35,23 +35,24 @@ contract('testInterruptedMigration', (accounts) => {
         expect(matcher).not.equal(null);
         const logicAddress = matcher[1];
 
-        // check if interrupted-migration file was saved correctly
-        expect(file(continueMigrationFile)).to.exist;
-        const interruptedMigrationObject = await contractHelper.readFromJSONFile(continueMigrationFile);
-        const expectedInterruptedMigrationObject = await contractHelper.readFromJSONFile(expectedInterruptedMigrationFile);
-        expectedInterruptedMigrationObject.sourceAddress = contractWithLib.address;
-        expectedInterruptedMigrationObject.staticReferences[convertLib.address] = {
+        // check if migrationState file was saved correctly
+        expect(file(`${continueMigrationFile}.json`)).to.exist;
+        const migrationStateObject = await contractHelper.readFromJSONFile(`${continueMigrationFile}.json`);
+        const expectedmigrationStateObject = await contractHelper.readFromJSONFile(expectedmigrationStateFile);
+        expectedmigrationStateObject.sourceAddress = contractWithLib.address;
+        expectedmigrationStateObject.staticReferences[convertLib.address] = {
             sourceAddress: convertLib.address,
             migratedKeys: {},
             migrationCompleted: true,
+            blockNumber: 'latest',
             logicAddress: logicAddress,
             staticReferences: {},
             stateReferences: {}
         }
-        expect(interruptedMigrationObject).to.deep.equal(expectedInterruptedMigrationObject);
+        expect(migrationStateObject).to.deep.equal(expectedmigrationStateObject);
 
         // continuing migration
-        migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile} -k ${configFilePath} --parity`;
+        migrateCommand = `./cli/index migrate --source ${source_dsl} --contract ${contractWithLib.address} --target ${target_dsl} --address ${accounts[0]} -i tests/${continueMigrationFile}.json -k ${configFilePath} --parity`;
         console.log(`Executing: \n${migrateCommand}`);
 
         output = execSync(migrateCommand, { cwd: './../' });
@@ -61,14 +62,14 @@ contract('testInterruptedMigration', (accounts) => {
         finder = output.toString().search(/This contract was already successfully migrated./g);
         expect(finder).not.to.equal(-1);
 
-        // check if interrupted-migration file was saved correctly
-        expect(file(continueMigrationFile)).to.exist;
-        const migratedContractObject = await contractHelper.readFromJSONFile(continueMigrationFile);
+        // check if migrationState file was saved correctly
+        expect(file(`${continueMigrationFile}.json`)).to.exist;
+        const migratedContractObject = await contractHelper.readFromJSONFile(`${continueMigrationFile}.json`);
         expect(migratedContractObject.sourceAddress).to.equal(contractWithLib.address);
         expect(migratedContractObject.proxyAddress).to.not.equal(undefined);
         expect(migratedContractObject.logicAddress).to.not.equal(undefined);
         expect(migratedContractObject.initAddress).to.not.equal(undefined);
-        expect(migratedContractObject.staticReferences).to.deep.equal(expectedInterruptedMigrationObject.staticReferences);
+        expect(migratedContractObject.staticReferences).to.deep.equal(expectedmigrationStateObject.staticReferences);
 
         // check if we can use the newly migrated contract
         const target_web3 = new Web3(target_dsl);
@@ -80,7 +81,9 @@ contract('testInterruptedMigration', (accounts) => {
         const sourceEthBalance = await contractWithLib.getBalanceInEth.call(accounts[0]);
 
         expect(targetEthBalance.toString()).to.equal(sourceEthBalance.toString());
+    });
 
-        execSync(`rm ${continueMigrationFile}`);
+    afterEach(() => {
+        execSync(`rm ${continueMigrationFile}*.json`);
     });
 });
